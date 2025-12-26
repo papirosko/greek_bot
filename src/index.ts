@@ -55,6 +55,11 @@ const buildOptionsKeyboard = (sessionId: string, options: string[]) => {
   return keyboard(rows);
 };
 
+const totalQuestions = (session: Session) =>
+  session.totalAsked + session.remainingIds.length + (session.current ? 1 : 0);
+
+const currentQuestionNumber = (session: Session) => session.totalAsked + 1;
+
 const sendQuestion = async (session: Session, verbs: { present: string; translation: string }[]) => {
   if (!session.current) {
     return;
@@ -63,7 +68,7 @@ const sendQuestion = async (session: Session, verbs: { present: string; translat
   const optionTexts = session.current.options.map((id) => verbs[id].translation);
   const response = await sendMessage(
     session.userId,
-    `Переведи: ${questionVerb.present}`,
+    `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${questionVerb.present}`,
     buildOptionsKeyboard(session.sessionId, optionTexts)
   );
 
@@ -151,6 +156,7 @@ const handleAnswer = async (
   }
 
   const resultText = [
+    `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}`,
     `Переведи: ${questionVerb.present}`,
     `Ваш ответ: ${selectedVerb.translation}`,
     `Правильный ответ: ${correctVerb.translation}`,
