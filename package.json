@@ -1,0 +1,19 @@
+{
+  "name": "bot-greek",
+  "version": "0.1.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "echo 'no lint configured'",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "scats": "1.4.5"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^20.11.19",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+lambda.zip
+*.log
+.DS_Store
+.env
+.env.*
+# Service account key
+*service-account*.json
+greek-bot-482410-e3d7e47dfa5c.json
