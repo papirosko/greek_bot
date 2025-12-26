@@ -250,11 +250,9 @@ const handleAnswer = async (
     await putSession(session);
     await sendMessage(
       chatId,
-      [
-        `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`,
-        "Чтобы выбрать новый режим, напишите /end.",
-      ].join("\n")
+      `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
     );
+    await handleStart(chatId);
     return;
   }
 
@@ -304,11 +302,9 @@ const handleTextAnswer = async (chatId: number, text: string) => {
     await putSession(session);
     await sendMessage(
       chatId,
-      [
-        `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`,
-        "Чтобы выбрать новый режим, напишите /start.",
-      ].join("\n")
+      `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
     );
+    await handleStart(chatId);
     return;
   }
 
