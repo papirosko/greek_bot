@@ -1,5 +1,6 @@
 import { Try, option } from "scats";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { safePutMetric } from "./metrics";
 import { answerCallback, editMessageText, keyboard, sendMessage, TelegramKeyboardButton } from "./telegram";
 import { getLevelVerbs } from "./sheets";
 import {
@@ -192,6 +193,10 @@ const handleLevel = async (
   session.current = questionPack.question;
   session.remainingIds = questionPack.remaining;
   await putSession(session);
+  await safePutMetric("SessionStart", 1, {
+    Mode: session.mode,
+    Level: session.level.toUpperCase(),
+  });
   await sendQuestion(session, verbs);
 };
 
@@ -244,10 +249,19 @@ const handleAnswer = async (
   ].join("\n");
 
   await Promise.all([answerCallback(callbackId), editMessageText(chatId, messageId, resultText)]);
+  await safePutMetric("QuestionAnswered", 1, {
+    Mode: session.mode,
+    Level: session.level.toUpperCase(),
+    Result: isCorrect ? "correct" : "wrong",
+  });
 
   const nextPack = createQuestion(verbs, session.remainingIds);
   if (!nextPack) {
     await putSession(session);
+    await safePutMetric("SessionEnd", 1, {
+      Mode: session.mode,
+      Level: session.level.toUpperCase(),
+    });
     await sendMessage(
       chatId,
       `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
@@ -265,11 +279,17 @@ const handleAnswer = async (
 const handleTextAnswer = async (chatId: number, text: string) => {
   const session = await getSessionByUserId(chatId);
   if (!session || !session.current || session.mode !== "write") {
+    await safePutMetric("InvalidAnswer", 1, { Reason: "no_session", Mode: "write", Level: "unknown" });
     return sendMessage(chatId, "Нет активной тренировки. Напишите /start.");
   }
 
   const answer = normalizeInput(text);
   if (!answer) {
+    await safePutMetric("InvalidAnswer", 1, {
+      Reason: "empty",
+      Mode: session.mode,
+      Level: session.level.toUpperCase(),
+    });
     return sendMessage(chatId, "Ответ пустой. Напишите слово на греческом.");
   }
 
@@ -296,10 +316,19 @@ const handleTextAnswer = async (chatId: number, text: string) => {
   } else {
     await sendMessage(chatId, resultText);
   }
+  await safePutMetric("QuestionAnswered", 1, {
+    Mode: session.mode,
+    Level: session.level.toUpperCase(),
+    Result: isCorrect ? "correct" : "wrong",
+  });
 
   const nextPack = createQuestion(verbs, session.remainingIds);
   if (!nextPack) {
     await putSession(session);
+    await safePutMetric("SessionEnd", 1, {
+      Mode: session.mode,
+      Level: session.level.toUpperCase(),
+    });
     await sendMessage(
       chatId,
       `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
@@ -346,23 +375,34 @@ const handleCallback = (update: TelegramUpdate) =>
 export const handler = async (
   event: APIGatewayProxyEventV2
 ): Promise<APIGatewayProxyResultV2> => {
-  const update = parseUpdate(event);
-  const chatId = update.message?.chat?.id;
+  try {
+    const update = parseUpdate(event);
+    const chatId = update.message?.chat?.id;
 
-  if (chatId) {
-    const text = update.message?.text ?? "";
-    const normalized = text.trim().toLowerCase();
-    if (normalized === "/start" || normalized === "/menu" || normalized === "/end" || normalized === "завершить") {
-      await clearActiveSession(chatId);
-      await handleStart(chatId);
-    } else if (!normalized.startsWith("/")) {
-      await handleTextAnswer(chatId, text);
-    } else {
-      await sendMessage(chatId, "Пока поддерживается команда /start.");
+    if (chatId) {
+      const text = update.message?.text ?? "";
+      const normalized = text.trim().toLowerCase();
+      if (
+        normalized === "/start" ||
+        normalized === "/menu" ||
+        normalized === "/end" ||
+        normalized === "завершить"
+      ) {
+        await clearActiveSession(chatId);
+        await handleStart(chatId);
+      } else if (!normalized.startsWith("/")) {
+        await handleTextAnswer(chatId, text);
+      } else {
+        await sendMessage(chatId, "Пока поддерживается команда /start.");
+      }
     }
+
+    await handleCallback(update).getOrElse(() => Promise.resolve());
+
+    return { statusCode: 200, body: "ok" };
+  } catch (error) {
+    console.error("handler_error", error);
+    await safePutMetric("Error", 1, { Stage: "handler" });
+    return { statusCode: 200, body: "ok" };
   }
-
-  await handleCallback(update).getOrElse(() => Promise.resolve());
-
-  return { statusCode: 200, body: "ok" };
 };
