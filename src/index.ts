@@ -78,6 +78,23 @@ const currentQuestionNumber = (session: Session) => session.totalAsked + 1;
 
 const normalizeInput = (value: string) => value.trim().toLowerCase();
 
+const removeGreekAccents = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300\u0301\u0342\u0344\u0345]/g, "")
+    .normalize("NFC");
+
+const hasGreekAccent = (value: string) => /[\u0300\u0301\u0342\u0344\u0345]/.test(value.normalize("NFD"));
+
+const matchesGreekInput = (input: string, correct: string) => {
+  const normalizedInput = normalizeInput(input);
+  const normalizedCorrect = normalizeInput(correct);
+  if (!hasGreekAccent(normalizedInput)) {
+    return removeGreekAccents(normalizedInput) === removeGreekAccents(normalizedCorrect);
+  }
+  return normalizedInput === normalizedCorrect;
+};
+
 const buildPrompt = (session: Session, verb: { present: string; translation: string }) => {
   if (session.mode === "ru-gr" || session.mode === "write") {
     return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.translation}`;
@@ -247,7 +264,7 @@ const handleTextAnswer = async (chatId: number, text: string) => {
   const verbs = await getLevelVerbs(session.level.toUpperCase());
   const questionVerb = verbs[session.current.verbId];
   const correctAnswer = normalizeInput(questionVerb.present);
-  const isCorrect = answer === correctAnswer;
+  const isCorrect = matchesGreekInput(answer, correctAnswer);
 
   session.totalAsked += 1;
   if (isCorrect) {
