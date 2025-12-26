@@ -197,6 +197,7 @@ const handleLevel = async (
     Mode: session.mode,
     Level: session.level.toUpperCase(),
   });
+  await safePutMetric("SessionStartTotal", 1, {});
   await sendQuestion(session, verbs);
 };
 
@@ -254,6 +255,8 @@ const handleAnswer = async (
     Level: session.level.toUpperCase(),
     Result: isCorrect ? "correct" : "wrong",
   });
+  await safePutMetric("QuestionAnsweredTotal", 1, {});
+  await safePutMetric(isCorrect ? "QuestionAnsweredCorrect" : "QuestionAnsweredWrong", 1, {});
 
   const nextPack = createQuestion(verbs, session.remainingIds);
   if (!nextPack) {
@@ -262,6 +265,7 @@ const handleAnswer = async (
       Mode: session.mode,
       Level: session.level.toUpperCase(),
     });
+    await safePutMetric("SessionEndTotal", 1, {});
     await sendMessage(
       chatId,
       `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
@@ -280,6 +284,7 @@ const handleTextAnswer = async (chatId: number, text: string) => {
   const session = await getSessionByUserId(chatId);
   if (!session || !session.current || session.mode !== "write") {
     await safePutMetric("InvalidAnswer", 1, { Reason: "no_session", Mode: "write", Level: "unknown" });
+    await safePutMetric("InvalidAnswerTotal", 1, {});
     return sendMessage(chatId, "Нет активной тренировки. Напишите /start.");
   }
 
@@ -290,6 +295,7 @@ const handleTextAnswer = async (chatId: number, text: string) => {
       Mode: session.mode,
       Level: session.level.toUpperCase(),
     });
+    await safePutMetric("InvalidAnswerTotal", 1, {});
     return sendMessage(chatId, "Ответ пустой. Напишите слово на греческом.");
   }
 
@@ -321,6 +327,8 @@ const handleTextAnswer = async (chatId: number, text: string) => {
     Level: session.level.toUpperCase(),
     Result: isCorrect ? "correct" : "wrong",
   });
+  await safePutMetric("QuestionAnsweredTotal", 1, {});
+  await safePutMetric(isCorrect ? "QuestionAnsweredCorrect" : "QuestionAnsweredWrong", 1, {});
 
   const nextPack = createQuestion(verbs, session.remainingIds);
   if (!nextPack) {
@@ -329,6 +337,7 @@ const handleTextAnswer = async (chatId: number, text: string) => {
       Mode: session.mode,
       Level: session.level.toUpperCase(),
     });
+    await safePutMetric("SessionEndTotal", 1, {});
     await sendMessage(
       chatId,
       `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
@@ -403,6 +412,7 @@ export const handler = async (
   } catch (error) {
     console.error("handler_error", error);
     await safePutMetric("Error", 1, { Stage: "handler" });
+    await safePutMetric("ErrorTotal", 1, {});
     return { statusCode: 200, body: "ok" };
   }
 };
