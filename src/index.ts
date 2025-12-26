@@ -1,6 +1,9 @@
-import https from "https";
-import { Collection, Try, option } from "scats";
+import { Try, option } from "scats";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { answerCallback, editMessageText, keyboard, sendMessage, TelegramKeyboardButton } from "./telegram";
+import { getLevelVerbs } from "./sheets";
+import { createSession, getSession, putSession, Session } from "./sessions";
+import { createQuestion } from "./quiz";
 
 type TelegramUpdate = {
   message?: {
@@ -17,90 +20,58 @@ type TelegramUpdate = {
   };
 };
 
-type TelegramKeyboardButton = {
-  text: string;
-  callback_data: string;
-};
-
-type TelegramInlineKeyboard = {
-  inline_keyboard: TelegramKeyboardButton[][];
-};
-
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-
-const telegramRequest = (method: string, payload: Record<string, unknown>) =>
-  new Promise((resolve, reject) => {
-    if (!TELEGRAM_TOKEN) {
-      return reject(new Error("Missing TELEGRAM_TOKEN"));
-    }
-
-    const body = JSON.stringify(payload);
-    const req = https.request(
-      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/${method}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => resolve({ status: res.statusCode, data }));
-      }
-    );
-    req.on("error", reject);
-    req.write(body);
-    req.end();
-  });
-
-const sendMessage = (chatId: number, text: string, keyboard?: TelegramInlineKeyboard) =>
-  telegramRequest("sendMessage", {
-    chat_id: chatId,
-    text,
-    reply_markup: keyboard,
-  });
-
-const editMessageText = (
-  chatId: number,
-  messageId: number,
-  text: string,
-  keyboard?: TelegramInlineKeyboard
-) =>
-  telegramRequest("editMessageText", {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    reply_markup: keyboard,
-  });
-
-const answerCallback = (callbackQueryId: string) =>
-  telegramRequest("answerCallbackQuery", {
-    callback_query_id: callbackQueryId,
-  });
-
-const keyboard = (buttons: TelegramKeyboardButton[]): TelegramInlineKeyboard => ({
-  inline_keyboard: new Collection(buttons).map((button) => [button]).toArray,
-});
-
 const modeKeyboard = keyboard([
-  { text: "Перевод (GR → RU)", callback_data: "mode:translate" },
+  [{ text: "Перевод (GR → RU)", callback_data: "mode:translate" }],
 ]);
 
 const levelKeyboard = keyboard([
-  { text: "A1", callback_data: "level:a1" },
-  { text: "A2", callback_data: "level:a2" },
-  { text: "B1", callback_data: "level:b1" },
-  { text: "B2", callback_data: "level:b2" },
+  [{ text: "A1", callback_data: "level:a1" }, { text: "A2", callback_data: "level:a2" }],
+  [{ text: "B1", callback_data: "level:b1" }, { text: "B2", callback_data: "level:b2" }],
 ]);
 
 const parseUpdate = (event: APIGatewayProxyEventV2): TelegramUpdate => {
-  const body = option(event.body)
+  if (!event.body) {
+    return {} as TelegramUpdate;
+  }
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body, "base64").toString("utf-8")
+    : event.body;
+
+  return option(rawBody)
     .map((raw) => Try(() => JSON.parse(raw)))
     .flatMap((result) => result.toOption)
-    .getOrElse(() => ({}));
-  return body as TelegramUpdate;
+    .getOrElse(() => ({})) as TelegramUpdate;
+};
+
+const buildOptionsKeyboard = (sessionId: string, options: string[]) => {
+  const buttons = options.map<TelegramKeyboardButton>((text, index) => ({
+    text,
+    callback_data: `s=${sessionId}&a=${index}`,
+  }));
+  const rows: TelegramKeyboardButton[][] = [];
+  for (let i = 0; i < buttons.length; i += 2) {
+    rows.push(buttons.slice(i, i + 2));
+  }
+  return keyboard(rows);
+};
+
+const sendQuestion = async (session: Session, verbs: { present: string; translation: string }[]) => {
+  if (!session.current) {
+    return;
+  }
+  const questionVerb = verbs[session.current.verbId];
+  const optionTexts = session.current.options.map((id) => verbs[id].translation);
+  const response = await sendMessage(
+    session.userId,
+    `Переведи: ${questionVerb.present}`,
+    buildOptionsKeyboard(session.sessionId, optionTexts)
+  );
+
+  const messageId = response.result?.message_id;
+  if (messageId) {
+    session.current.messageId = messageId;
+    await putSession(session);
+  }
 };
 
 const handleStart = (chatId: number) =>
@@ -112,12 +83,100 @@ const handleMode = (chatId: number, messageId: number, callbackId: string) =>
     editMessageText(chatId, messageId, "Режим: Перевод. Выберите уровень:", levelKeyboard),
   ]);
 
-const handleLevel = (chatId: number, messageId: number, callbackId: string, level: string) =>
-  Promise.all([
+const handleLevel = async (
+  chatId: number,
+  messageId: number,
+  callbackId: string,
+  level: string
+) => {
+  await Promise.all([
     answerCallback(callbackId),
     editMessageText(chatId, messageId, `Уровень ${level.toUpperCase()} выбран.`),
-    sendMessage(chatId, "Скоро появится первый вопрос."),
   ]);
+
+  const verbs = await getLevelVerbs(level.toUpperCase());
+  if (verbs.length < 4) {
+    await sendMessage(chatId, "Недостаточно глаголов для тренировки.");
+    return;
+  }
+
+  const ids = verbs.map((verb) => verb.id);
+  const session = createSession(chatId, level, ids);
+  const questionPack = createQuestion(verbs, session.remainingIds);
+  if (!questionPack) {
+    await sendMessage(chatId, "Не удалось сформировать вопрос.");
+    return;
+  }
+
+  session.current = questionPack.question;
+  session.remainingIds = questionPack.remaining;
+  await putSession(session);
+  await sendQuestion(session, verbs);
+};
+
+const handleAnswer = async (
+  chatId: number,
+  messageId: number,
+  callbackId: string,
+  sessionId: string,
+  answerIndex: number
+) => {
+  const session = await getSession(sessionId);
+  if (!session || !session.current) {
+    await Promise.all([
+      answerCallback(callbackId),
+      sendMessage(chatId, "Сессия не найдена. Начните заново через /start."),
+    ]);
+    return;
+  }
+
+  if (session.current.messageId && session.current.messageId !== messageId) {
+    await Promise.all([
+      answerCallback(callbackId),
+      sendMessage(chatId, "Этот вопрос уже не активен. Начните заново через /start."),
+    ]);
+    return;
+  }
+
+  const verbs = await getLevelVerbs(session.level.toUpperCase());
+  const questionVerb = verbs[session.current.verbId];
+  const selectedId = session.current.options[answerIndex];
+  const selectedVerb = verbs[selectedId];
+  const correctVerb = verbs[session.current.options[session.current.correctIndex]];
+
+  const isCorrect = answerIndex === session.current.correctIndex;
+  session.totalAsked += 1;
+  if (isCorrect) {
+    session.correctCount += 1;
+  }
+
+  const resultText = [
+    `Переведи: ${questionVerb.present}`,
+    `Ваш ответ: ${selectedVerb.translation}`,
+    `Правильный ответ: ${correctVerb.translation}`,
+    isCorrect ? "✅ Верно" : "❌ Неверно",
+  ].join("\n");
+
+  await Promise.all([
+    answerCallback(callbackId),
+    editMessageText(chatId, messageId, resultText),
+  ]);
+
+  const nextPack = createQuestion(verbs, session.remainingIds);
+  if (!nextPack) {
+    await putSession(session);
+    await sendMessage(
+      chatId,
+      `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
+    );
+    return;
+  }
+
+  session.current = nextPack.question;
+  session.remainingIds = nextPack.remaining;
+  await putSession(session);
+  await sendQuestion(session, verbs);
+};
 
 const handleCallback = (update: TelegramUpdate) =>
   option(update.callback_query)
@@ -140,6 +199,10 @@ const handleCallback = (update: TelegramUpdate) =>
         const level = data.split(":")[1] ?? "";
         return handleLevel(chatId, messageId, callbackId, level);
       }
+      const answerMatch = data.match(/^s=([^&]+)&a=(\d+)$/);
+      if (answerMatch) {
+        return handleAnswer(chatId, messageId, callbackId, answerMatch[1], Number(answerMatch[2]));
+      }
       return answerCallback(callbackId);
     });
 
@@ -147,16 +210,16 @@ export const handler = async (
   event: APIGatewayProxyEventV2
 ): Promise<APIGatewayProxyResultV2> => {
   const update = parseUpdate(event);
+  const chatId = update.message?.chat?.id;
 
-  await option(update.message?.chat?.id)
-    .map((chatId) => {
-      const text = update.message?.text ?? "";
-      if (text === "/start") {
-        return handleStart(chatId);
-      }
-      return sendMessage(chatId, "Пока поддерживается только /start.");
-    })
-    .getOrElse(() => Promise.resolve());
+  if (chatId) {
+    const text = update.message?.text ?? "";
+    if (text === "/start") {
+      await handleStart(chatId);
+    } else {
+      await sendMessage(chatId, "Пока поддерживается только /start.");
+    }
+  }
 
   await handleCallback(update).getOrElse(() => Promise.resolve());
 
