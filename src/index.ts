@@ -167,7 +167,10 @@ const handleAnswer = async (
     await putSession(session);
     await sendMessage(
       chatId,
-      `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`
+      [
+        `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`,
+        "Чтобы выбрать новый режим, напишите /end.",
+      ].join("\n")
     );
     return;
   }
@@ -214,10 +217,11 @@ export const handler = async (
 
   if (chatId) {
     const text = update.message?.text ?? "";
-    if (text === "/start") {
+    const normalized = text.trim().toLowerCase();
+    if (normalized === "/start" || normalized === "/menu" || normalized === "/end" || normalized === "завершить") {
       await handleStart(chatId);
     } else {
-      await sendMessage(chatId, "Пока поддерживается только /start.");
+      await sendMessage(chatId, "Пока поддерживаются команды /start и /end.");
     }
   }
 
