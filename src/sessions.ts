@@ -1,6 +1,12 @@
 import crypto from "crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { config } from "./config";
 
 export type SessionQuestion = {
@@ -14,12 +20,13 @@ export type Session = {
   sessionId: string;
   userId: number;
   level: string;
-  mode: "gr-ru" | "ru-gr";
+  mode: "gr-ru" | "ru-gr" | "write";
   remainingIds: number[];
   totalAsked: number;
   correctCount: number;
   current?: SessionQuestion;
   expiresAt: number;
+  updatedAt: number;
 };
 
 const client = new DynamoDBClient({});
@@ -32,6 +39,7 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 export const createSessionId = () => crypto.randomBytes(8).toString("hex");
 
 export const putSession = async (session: Session) => {
+  session.updatedAt = nowSeconds();
   await docClient.send(
     new PutCommand({
       TableName: config.sessionsTable,
@@ -49,6 +57,21 @@ export const getSession = async (sessionId: string) => {
     })
   );
   return response.Item as Session | undefined;
+};
+
+export const getSessionByUserId = async (userId: number) => {
+  const response = await docClient.send(
+    new QueryCommand({
+      TableName: config.sessionsTable,
+      IndexName: "userId-index",
+      KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: {
+        ":userId": userId,
+      },
+      Limit: 1,
+    })
+  );
+  return (response.Items?.[0] as Session | undefined) ?? undefined;
 };
 
 export const deleteSession = async (sessionId: string) => {
@@ -75,5 +98,6 @@ export const createSession = (
     totalAsked: 0,
     correctCount: 0,
     expiresAt: nowSeconds() + 24 * 60 * 60,
+    updatedAt: nowSeconds(),
   };
 };

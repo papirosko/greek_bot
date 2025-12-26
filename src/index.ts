@@ -2,7 +2,7 @@ import { Try, option } from "scats";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { answerCallback, editMessageText, keyboard, sendMessage, TelegramKeyboardButton } from "./telegram";
 import { getLevelVerbs } from "./sheets";
-import { createSession, getSession, putSession, Session } from "./sessions";
+import { createSession, getSession, getSessionByUserId, putSession, Session } from "./sessions";
 import { createQuestion } from "./quiz";
 
 type TelegramUpdate = {
@@ -23,6 +23,7 @@ type TelegramUpdate = {
 const modeKeyboard = keyboard([
   [{ text: "Перевод (GR → RU)", callback_data: "mode:gr-ru" }],
   [{ text: "Перевод (RU → GR)", callback_data: "mode:ru-gr" }],
+  [{ text: "Написание (RU → GR)", callback_data: "mode:write" }],
 ]);
 
 const buildLevelKeyboard = (mode: Session["mode"]) =>
@@ -68,8 +69,10 @@ const totalQuestions = (session: Session) =>
 
 const currentQuestionNumber = (session: Session) => session.totalAsked + 1;
 
+const normalizeInput = (value: string) => value.trim().toLowerCase();
+
 const buildPrompt = (session: Session, verb: { present: string; translation: string }) => {
-  if (session.mode === "ru-gr") {
+  if (session.mode === "ru-gr" || session.mode === "write") {
     return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.translation}`;
   }
   return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.present}`;
@@ -84,11 +87,14 @@ const sendQuestion = async (session: Session, verbs: { present: string; translat
     session.mode === "ru-gr"
       ? session.current.options.map((id) => verbs[id].present)
       : session.current.options.map((id) => verbs[id].translation);
-  const response = await sendMessage(
-    session.userId,
-    buildPrompt(session, questionVerb),
-    buildOptionsKeyboard(session.sessionId, optionTexts)
-  );
+  const response =
+    session.mode === "write"
+      ? await sendMessage(session.userId, buildPrompt(session, questionVerb))
+      : await sendMessage(
+          session.userId,
+          buildPrompt(session, questionVerb),
+          buildOptionsKeyboard(session.sessionId, optionTexts)
+        );
 
   const messageId = response.result?.message_id;
   if (messageId) {
@@ -106,7 +112,7 @@ const handleMode = (chatId: number, messageId: number, callbackId: string, mode:
     editMessageText(
       chatId,
       messageId,
-      `Режим: ${mode === "ru-gr" ? "RU → GR" : "GR → RU"}. Выберите уровень:`,
+      `Режим: ${mode === "ru-gr" ? "RU → GR" : mode === "write" ? "Написание RU → GR" : "GR → RU"}. Выберите уровень:`,
       buildLevelKeyboard(mode)
     ),
   ]);
@@ -184,7 +190,7 @@ const handleAnswer = async (
 
   const resultText = [
     `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}`,
-    session.mode === "ru-gr"
+    session.mode === "ru-gr" || session.mode === "write"
       ? `Переведи: ${questionVerb.translation}`
       : `Переведи: ${questionVerb.present}`,
     `Ваш ответ: ${selectedText}`,
@@ -213,6 +219,60 @@ const handleAnswer = async (
   await sendQuestion(session, verbs);
 };
 
+const handleTextAnswer = async (chatId: number, text: string) => {
+  const session = await getSessionByUserId(chatId);
+  if (!session || !session.current || session.mode !== "write") {
+    return sendMessage(chatId, "Нет активной тренировки. Напишите /start.");
+  }
+
+  const answer = normalizeInput(text);
+  if (!answer) {
+    return sendMessage(chatId, "Ответ пустой. Напишите слово на греческом.");
+  }
+
+  const verbs = await getLevelVerbs(session.level.toUpperCase());
+  const questionVerb = verbs[session.current.verbId];
+  const correctAnswer = normalizeInput(questionVerb.present);
+  const isCorrect = answer === correctAnswer;
+
+  session.totalAsked += 1;
+  if (isCorrect) {
+    session.correctCount += 1;
+  }
+
+  const resultText = [
+    `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}`,
+    `Переведи: ${questionVerb.translation}`,
+    `Ваш ответ: ${answer}`,
+    `Правильный ответ: ${questionVerb.present}`,
+    isCorrect ? "✅ Верно" : "❌ Неверно",
+  ].join("\n");
+
+  if (session.current.messageId) {
+    await editMessageText(chatId, session.current.messageId, resultText);
+  } else {
+    await sendMessage(chatId, resultText);
+  }
+
+  const nextPack = createQuestion(verbs, session.remainingIds);
+  if (!nextPack) {
+    await putSession(session);
+    await sendMessage(
+      chatId,
+      [
+        `Сессия завершена. Правильных: ${session.correctCount} из ${session.totalAsked}.`,
+        "Чтобы выбрать новый режим, напишите /start.",
+      ].join("\n")
+    );
+    return;
+  }
+
+  session.current = nextPack.question;
+  session.remainingIds = nextPack.remaining;
+  await putSession(session);
+  await sendQuestion(session, verbs);
+};
+
 const handleCallback = (update: TelegramUpdate) =>
   option(update.callback_query)
     .flatMap((query) =>
@@ -227,11 +287,11 @@ const handleCallback = (update: TelegramUpdate) =>
         )
     )
     .map(({ chatId, messageId, callbackId, data }) => {
-      if (data === "mode:ru-gr" || data === "mode:gr-ru") {
+      if (data === "mode:ru-gr" || data === "mode:gr-ru" || data === "mode:write") {
         const mode = (data.split(":")[1] ?? "gr-ru") as Session["mode"];
         return handleMode(chatId, messageId, callbackId, mode);
       }
-      const levelMatch = data.match(/^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru)$/);
+      const levelMatch = data.match(/^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru|write)$/);
       if (levelMatch) {
         return handleLevel(chatId, messageId, callbackId, levelMatch[1], levelMatch[2] as Session["mode"]);
       }
@@ -253,8 +313,10 @@ export const handler = async (
     const normalized = text.trim().toLowerCase();
     if (normalized === "/start" || normalized === "/menu" || normalized === "/end" || normalized === "завершить") {
       await handleStart(chatId);
+    } else if (!normalized.startsWith("/")) {
+      await handleTextAnswer(chatId, text);
     } else {
-      await sendMessage(chatId, "Пока поддерживаются команды /start и /end.");
+      await sendMessage(chatId, "Пока поддерживается команда /start.");
     }
   }
 
