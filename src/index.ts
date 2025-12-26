@@ -2,7 +2,14 @@ import { Try, option } from "scats";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { answerCallback, editMessageText, keyboard, sendMessage, TelegramKeyboardButton } from "./telegram";
 import { getLevelVerbs } from "./sheets";
-import { createSession, getSession, getSessionByUserId, putSession, Session } from "./sessions";
+import {
+  createSession,
+  deleteSession,
+  getSession,
+  getSessionByUserId,
+  putSession,
+  Session,
+} from "./sessions";
 import { createQuestion } from "./quiz";
 
 type TelegramUpdate = {
@@ -105,6 +112,13 @@ const sendQuestion = async (session: Session, verbs: { present: string; translat
 
 const handleStart = (chatId: number) =>
   sendMessage(chatId, "Выберите режим тренировки:", modeKeyboard);
+
+const clearActiveSession = async (userId: number) => {
+  const active = await getSessionByUserId(userId);
+  if (active) {
+    await deleteSession(active.sessionId);
+  }
+};
 
 const handleMode = (chatId: number, messageId: number, callbackId: string, mode: Session["mode"]) =>
   Promise.all([
@@ -312,6 +326,7 @@ export const handler = async (
     const text = update.message?.text ?? "";
     const normalized = text.trim().toLowerCase();
     if (normalized === "/start" || normalized === "/menu" || normalized === "/end" || normalized === "завершить") {
+      await clearActiveSession(chatId);
       await handleStart(chatId);
     } else if (!normalized.startsWith("/")) {
       await handleTextAnswer(chatId, text);
