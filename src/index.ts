@@ -149,6 +149,16 @@ const handleMode = (chatId: number, messageId: number, callbackId: string, mode:
   ]);
 
 
+const formatModeLabel = (mode: Session["mode"]) => {
+  if (mode === "ru-gr") {
+    return "Перевод (RU → GR)";
+  }
+  if (mode === "write") {
+    return "Написание (RU → GR)";
+  }
+  return "Перевод (GR → RU)";
+};
+
 const handleLevel = async (
   chatId: number,
   messageId: number,
@@ -158,7 +168,11 @@ const handleLevel = async (
 ) => {
   await Promise.all([
     answerCallback(callbackId),
-    editMessageText(chatId, messageId, `Уровень ${level.toUpperCase()} выбран.`),
+    editMessageText(
+      chatId,
+      messageId,
+      `Выбран ${formatModeLabel(mode)} уровень ${level.toUpperCase()}.`
+    ),
   ]);
 
   const verbs = await getLevelVerbs(level.toUpperCase());
