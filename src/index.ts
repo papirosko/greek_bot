@@ -2,7 +2,7 @@ import { Try, option } from "scats";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { answerCallback, editMessageText, keyboard, sendMessage, TelegramKeyboardButton } from "./telegram";
 import { getLevelVerbs } from "./sheets";
-import { createSession, getSession, putSession, Session } from "./sessions";
+import { createSession, deleteSession, getSession, putSession, Session } from "./sessions";
 import { createQuestion } from "./quiz";
 
 type TelegramUpdate = {
@@ -20,9 +20,14 @@ type TelegramUpdate = {
   };
 };
 
+const menuRow = (sessionId?: string): TelegramKeyboardButton[][] => [
+  [{ text: "Главное меню", callback_data: sessionId ? `menu:${sessionId}` : "menu" }],
+];
+
 const modeKeyboard = keyboard([
   [{ text: "Перевод (GR → RU)", callback_data: "mode:gr-ru" }],
   [{ text: "Перевод (RU → GR)", callback_data: "mode:ru-gr" }],
+  ...menuRow(),
 ]);
 
 const buildLevelKeyboard = (mode: Session["mode"]) =>
@@ -35,6 +40,7 @@ const buildLevelKeyboard = (mode: Session["mode"]) =>
       { text: "B1", callback_data: `level:b1|mode:${mode}` },
       { text: "B2", callback_data: `level:b2|mode:${mode}` },
     ],
+    ...menuRow(),
   ]);
 
 const parseUpdate = (event: APIGatewayProxyEventV2): TelegramUpdate => {
@@ -60,6 +66,7 @@ const buildOptionsKeyboard = (sessionId: string, options: string[]) => {
   for (let i = 0; i < buttons.length; i += 2) {
     rows.push(buttons.slice(i, i + 2));
   }
+  rows.push(...menuRow(sessionId));
   return keyboard(rows);
 };
 
@@ -110,6 +117,21 @@ const handleMode = (chatId: number, messageId: number, callbackId: string, mode:
       buildLevelKeyboard(mode)
     ),
   ]);
+
+const handleMenu = async (
+  chatId: number,
+  messageId: number,
+  callbackId: string,
+  sessionId?: string
+) => {
+  if (sessionId) {
+    await deleteSession(sessionId);
+  }
+  await Promise.all([
+    answerCallback(callbackId),
+    editMessageText(chatId, messageId, "Выберите режим тренировки:", modeKeyboard),
+  ]);
+};
 
 const handleLevel = async (
   chatId: number,
@@ -193,7 +215,7 @@ const handleAnswer = async (
 
   await Promise.all([
     answerCallback(callbackId),
-    editMessageText(chatId, messageId, resultText),
+    editMessageText(chatId, messageId, resultText, keyboard(menuRow(session.sessionId))),
   ]);
 
   const nextPack = createQuestion(verbs, session.remainingIds);
@@ -232,6 +254,13 @@ const handleCallback = (update: TelegramUpdate) =>
       if (data === "mode:ru-gr" || data === "mode:gr-ru") {
         const mode = (data.split(":")[1] ?? "gr-ru") as Session["mode"];
         return handleMode(chatId, messageId, callbackId, mode);
+      }
+      if (data === "menu") {
+        return handleMenu(chatId, messageId, callbackId);
+      }
+      if (data.startsWith("menu:")) {
+        const sessionId = data.split(":")[1];
+        return handleMenu(chatId, messageId, callbackId, sessionId);
       }
       const levelMatch = data.match(/^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru)$/);
       if (levelMatch) {

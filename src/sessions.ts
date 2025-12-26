@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { config } from "./config";
 
 export type SessionQuestion = {
@@ -49,6 +49,15 @@ export const getSession = async (sessionId: string) => {
     })
   );
   return response.Item as Session | undefined;
+};
+
+export const deleteSession = async (sessionId: string) => {
+  await docClient.send(
+    new DeleteCommand({
+      TableName: config.sessionsTable,
+      Key: { sessionId },
+    })
+  );
 };
 
 export const createSession = (
