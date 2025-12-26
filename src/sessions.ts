@@ -14,6 +14,7 @@ export type Session = {
   sessionId: string;
   userId: number;
   level: string;
+  mode: "gr-ru" | "ru-gr";
   remainingIds: number[];
   totalAsked: number;
   correctCount: number;
@@ -50,11 +51,17 @@ export const getSession = async (sessionId: string) => {
   return response.Item as Session | undefined;
 };
 
-export const createSession = (userId: number, level: string, remainingIds: number[]): Session => {
+export const createSession = (
+  userId: number,
+  level: string,
+  mode: Session["mode"],
+  remainingIds: number[]
+): Session => {
   return {
     sessionId: createSessionId(),
     userId,
     level,
+    mode,
     remainingIds,
     totalAsked: 0,
     correctCount: 0,

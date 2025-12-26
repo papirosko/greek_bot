@@ -21,13 +21,21 @@ type TelegramUpdate = {
 };
 
 const modeKeyboard = keyboard([
-  [{ text: "Перевод (GR → RU)", callback_data: "mode:translate" }],
+  [{ text: "Перевод (GR → RU)", callback_data: "mode:gr-ru" }],
+  [{ text: "Перевод (RU → GR)", callback_data: "mode:ru-gr" }],
 ]);
 
-const levelKeyboard = keyboard([
-  [{ text: "A1", callback_data: "level:a1" }, { text: "A2", callback_data: "level:a2" }],
-  [{ text: "B1", callback_data: "level:b1" }, { text: "B2", callback_data: "level:b2" }],
-]);
+const buildLevelKeyboard = (mode: Session["mode"]) =>
+  keyboard([
+    [
+      { text: "A1", callback_data: `level:a1|mode:${mode}` },
+      { text: "A2", callback_data: `level:a2|mode:${mode}` },
+    ],
+    [
+      { text: "B1", callback_data: `level:b1|mode:${mode}` },
+      { text: "B2", callback_data: `level:b2|mode:${mode}` },
+    ],
+  ]);
 
 const parseUpdate = (event: APIGatewayProxyEventV2): TelegramUpdate => {
   if (!event.body) {
@@ -60,15 +68,25 @@ const totalQuestions = (session: Session) =>
 
 const currentQuestionNumber = (session: Session) => session.totalAsked + 1;
 
+const buildPrompt = (session: Session, verb: { present: string; translation: string }) => {
+  if (session.mode === "ru-gr") {
+    return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.translation}`;
+  }
+  return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.present}`;
+};
+
 const sendQuestion = async (session: Session, verbs: { present: string; translation: string }[]) => {
   if (!session.current) {
     return;
   }
   const questionVerb = verbs[session.current.verbId];
-  const optionTexts = session.current.options.map((id) => verbs[id].translation);
+  const optionTexts =
+    session.mode === "ru-gr"
+      ? session.current.options.map((id) => verbs[id].present)
+      : session.current.options.map((id) => verbs[id].translation);
   const response = await sendMessage(
     session.userId,
-    `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${questionVerb.present}`,
+    buildPrompt(session, questionVerb),
     buildOptionsKeyboard(session.sessionId, optionTexts)
   );
 
@@ -82,17 +100,23 @@ const sendQuestion = async (session: Session, verbs: { present: string; translat
 const handleStart = (chatId: number) =>
   sendMessage(chatId, "Выберите режим тренировки:", modeKeyboard);
 
-const handleMode = (chatId: number, messageId: number, callbackId: string) =>
+const handleMode = (chatId: number, messageId: number, callbackId: string, mode: Session["mode"]) =>
   Promise.all([
     answerCallback(callbackId),
-    editMessageText(chatId, messageId, "Режим: Перевод. Выберите уровень:", levelKeyboard),
+    editMessageText(
+      chatId,
+      messageId,
+      `Режим: ${mode === "ru-gr" ? "RU → GR" : "GR → RU"}. Выберите уровень:`,
+      buildLevelKeyboard(mode)
+    ),
   ]);
 
 const handleLevel = async (
   chatId: number,
   messageId: number,
   callbackId: string,
-  level: string
+  level: string,
+  mode: Session["mode"]
 ) => {
   await Promise.all([
     answerCallback(callbackId),
@@ -106,7 +130,7 @@ const handleLevel = async (
   }
 
   const ids = verbs.map((verb) => verb.id);
-  const session = createSession(chatId, level, ids);
+  const session = createSession(chatId, level, mode, ids);
   const questionPack = createQuestion(verbs, session.remainingIds);
   if (!questionPack) {
     await sendMessage(chatId, "Не удалось сформировать вопрос.");
@@ -148,6 +172,8 @@ const handleAnswer = async (
   const selectedId = session.current.options[answerIndex];
   const selectedVerb = verbs[selectedId];
   const correctVerb = verbs[session.current.options[session.current.correctIndex]];
+  const selectedText = session.mode === "ru-gr" ? selectedVerb.present : selectedVerb.translation;
+  const correctText = session.mode === "ru-gr" ? correctVerb.present : correctVerb.translation;
 
   const isCorrect = answerIndex === session.current.correctIndex;
   session.totalAsked += 1;
@@ -157,9 +183,11 @@ const handleAnswer = async (
 
   const resultText = [
     `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}`,
-    `Переведи: ${questionVerb.present}`,
-    `Ваш ответ: ${selectedVerb.translation}`,
-    `Правильный ответ: ${correctVerb.translation}`,
+    session.mode === "ru-gr"
+      ? `Переведи: ${questionVerb.translation}`
+      : `Переведи: ${questionVerb.present}`,
+    `Ваш ответ: ${selectedText}`,
+    `Правильный ответ: ${correctText}`,
     isCorrect ? "✅ Верно" : "❌ Неверно",
   ].join("\n");
 
@@ -201,12 +229,13 @@ const handleCallback = (update: TelegramUpdate) =>
         )
     )
     .map(({ chatId, messageId, callbackId, data }) => {
-      if (data === "mode:translate") {
-        return handleMode(chatId, messageId, callbackId);
+      if (data === "mode:ru-gr" || data === "mode:gr-ru") {
+        const mode = (data.split(":")[1] ?? "gr-ru") as Session["mode"];
+        return handleMode(chatId, messageId, callbackId, mode);
       }
-      if (data.startsWith("level:")) {
-        const level = data.split(":")[1] ?? "";
-        return handleLevel(chatId, messageId, callbackId, level);
+      const levelMatch = data.match(/^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru)$/);
+      if (levelMatch) {
+        return handleLevel(chatId, messageId, callbackId, levelMatch[1], levelMatch[2] as Session["mode"]);
       }
       const answerMatch = data.match(/^s=([^&]+)&a=(\d+)$/);
       if (answerMatch) {
