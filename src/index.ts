@@ -72,7 +72,7 @@ const buildOptionsKeyboard = (sessionId: string, options: string[]) => {
 };
 
 const totalQuestions = (session: Session) =>
-  session.totalAsked + session.remainingIds.length + (session.current ? 1 : 0);
+  session.totalCount ?? session.totalAsked + session.remainingIds.length + (session.current ? 1 : 0);
 
 const currentQuestionNumber = (session: Session) => session.totalAsked + 1;
 

@@ -24,6 +24,7 @@ export type Session = {
   remainingIds: number[];
   totalAsked: number;
   correctCount: number;
+  totalCount: number;
   current?: SessionQuestion;
   expiresAt: number;
   updatedAt: number;
@@ -97,6 +98,7 @@ export const createSession = (
     remainingIds,
     totalAsked: 0,
     correctCount: 0,
+    totalCount: remainingIds.length,
     expiresAt: nowSeconds() + 24 * 60 * 60,
     updatedAt: nowSeconds(),
   };
