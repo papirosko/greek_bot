@@ -1,7 +1,7 @@
 import { Collection, none, some } from "scats";
-import { Session } from "../src/session";
-import { SessionQuestion } from "../src/session-question";
-import { TrainingMode } from "../src/training";
+import { Session } from "../../src/session";
+import { SessionQuestion } from "../../src/session-question";
+import { TrainingMode } from "../../src/training";
 
 describe("Session", () => {
   it("creates from json with defaults", () => {

@@ -1,5 +1,5 @@
 import { Collection, none, some } from "scats";
-import { SessionQuestion } from "../src/session-question";
+import { SessionQuestion } from "../../src/session-question";
 
 describe("SessionQuestion", () => {
   it("creates from json and normalizes types", () => {

@@ -1,7 +1,7 @@
 import { none, some } from "scats";
-import { MetadataSerDe } from "../src/metadata-serde";
-import { TelegramUpdateMessage } from "../src/telegram-types";
-import { TrainingMode } from "../src/training";
+import { MetadataSerDe } from "../../src/metadata-serde";
+import { TelegramUpdateMessage } from "../../src/telegram-types";
+import { TrainingMode } from "../../src/training";
 
 const makeUpdate = (data?: string) =>
   TelegramUpdateMessage.fromJson({

@@ -5,7 +5,7 @@ import {
   TelegramChat,
   TelegramMessage,
   TelegramUpdateMessage,
-} from "../src/telegram-types";
+} from "../../src/telegram-types";
 
 describe("TelegramUpdateMessage.fromJson", () => {
   it("parses message fields and converts types", () => {
