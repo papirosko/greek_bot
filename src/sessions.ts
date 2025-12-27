@@ -7,6 +7,7 @@ import {
   PutCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { TrainingMode } from "./training";
 import { config } from "./config";
 
 export type SessionQuestion = {
@@ -20,7 +21,7 @@ export type Session = {
   sessionId: string;
   userId: number;
   level: string;
-  mode: "gr-ru" | "ru-gr" | "write";
+  mode: TrainingMode;
   remainingIds: number[];
   totalAsked: number;
   correctCount: number;
@@ -87,7 +88,7 @@ export const deleteSession = async (sessionId: string) => {
 export const createSession = (
   userId: number,
   level: string,
-  mode: Session["mode"],
+  mode: TrainingMode,
   remainingIds: number[]
 ): Session => {
   return {

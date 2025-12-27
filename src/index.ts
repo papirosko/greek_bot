@@ -2,6 +2,7 @@ import { Try, option } from "scats";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { safePutMetric } from "./metrics";
 import { answerCallback, editMessageText, keyboard, sendMessage, TelegramKeyboardButton } from "./telegram";
+import { TrainingMode } from "./training";
 import { getLevelVerbs } from "./sheets";
 import {
   createSession,
@@ -29,12 +30,12 @@ type TelegramUpdate = {
 };
 
 const modeKeyboard = keyboard([
-  [{ text: "Перевод (GR → RU)", callback_data: "mode:gr-ru" }],
-  [{ text: "Перевод (RU → GR)", callback_data: "mode:ru-gr" }],
-  [{ text: "Написание (RU → GR)", callback_data: "mode:write" }],
+  [{ text: "Перевод (GR → RU)", callback_data: `mode:${TrainingMode.GrRu}` }],
+  [{ text: "Перевод (RU → GR)", callback_data: `mode:${TrainingMode.RuGr}` }],
+  [{ text: "Написание (RU → GR)", callback_data: `mode:${TrainingMode.Write}` }],
 ]);
 
-const buildLevelKeyboard = (mode: Session["mode"]) =>
+const buildLevelKeyboard = (mode: TrainingMode) =>
   keyboard([
     [
       { text: "A1", callback_data: `level:a1|mode:${mode}` },
@@ -97,7 +98,7 @@ const matchesGreekInput = (input: string, correct: string) => {
 };
 
 const buildPrompt = (session: Session, verb: { present: string; translation: string }) => {
-  if (session.mode === "ru-gr" || session.mode === "write") {
+  if (session.mode === TrainingMode.RuGr || session.mode === TrainingMode.Write) {
     return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.translation}`;
   }
   return `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}\nПереведи: ${verb.present}`;
@@ -109,11 +110,11 @@ const sendQuestion = async (session: Session, verbs: { present: string; translat
   }
   const questionVerb = verbs[session.current.verbId];
   const optionTexts =
-    session.mode === "ru-gr"
+    session.mode === TrainingMode.RuGr
       ? session.current.options.map((id) => verbs[id].present)
       : session.current.options.map((id) => verbs[id].translation);
   const response =
-    session.mode === "write"
+    session.mode === TrainingMode.Write
       ? await sendMessage(session.userId, buildPrompt(session, questionVerb))
       : await sendMessage(
           session.userId,
@@ -138,23 +139,23 @@ const clearActiveSession = async (userId: number) => {
   }
 };
 
-const handleMode = (chatId: number, messageId: number, callbackId: string, mode: Session["mode"]) =>
+const handleMode = (chatId: number, messageId: number, callbackId: string, mode: TrainingMode) =>
   Promise.all([
     answerCallback(callbackId),
     editMessageText(
       chatId,
       messageId,
-      `Режим: ${mode === "ru-gr" ? "RU → GR" : mode === "write" ? "Написание RU → GR" : "GR → RU"}. Выберите уровень:`,
+      `Режим: ${mode === TrainingMode.RuGr ? "RU → GR" : mode === TrainingMode.Write ? "Написание RU → GR" : "GR → RU"}. Выберите уровень:`,
       buildLevelKeyboard(mode)
     ),
   ]);
 
 
-const formatModeLabel = (mode: Session["mode"]) => {
-  if (mode === "ru-gr") {
+const formatModeLabel = (mode: TrainingMode) => {
+  if (mode === TrainingMode.RuGr) {
     return "Перевод (RU → GR)";
   }
-  if (mode === "write") {
+  if (mode === TrainingMode.Write) {
     return "Написание (RU → GR)";
   }
   return "Перевод (GR → RU)";
@@ -165,7 +166,7 @@ const handleLevel = async (
   messageId: number,
   callbackId: string,
   level: string,
-  mode: Session["mode"]
+  mode: TrainingMode
 ) => {
   await Promise.all([
     answerCallback(callbackId),
@@ -230,8 +231,8 @@ const handleAnswer = async (
   const selectedId = session.current.options[answerIndex];
   const selectedVerb = verbs[selectedId];
   const correctVerb = verbs[session.current.options[session.current.correctIndex]];
-  const selectedText = session.mode === "ru-gr" ? selectedVerb.present : selectedVerb.translation;
-  const correctText = session.mode === "ru-gr" ? correctVerb.present : correctVerb.translation;
+  const selectedText = session.mode === TrainingMode.RuGr ? selectedVerb.present : selectedVerb.translation;
+  const correctText = session.mode === TrainingMode.RuGr ? correctVerb.present : correctVerb.translation;
 
   const isCorrect = answerIndex === session.current.correctIndex;
   session.totalAsked += 1;
@@ -241,7 +242,7 @@ const handleAnswer = async (
 
   const resultText = [
     `Вопрос ${currentQuestionNumber(session)}/${totalQuestions(session)}`,
-    session.mode === "ru-gr" || session.mode === "write"
+    session.mode === TrainingMode.RuGr || session.mode === TrainingMode.Write
       ? `Переведи: ${questionVerb.translation}`
       : `Переведи: ${questionVerb.present}`,
     `Ваш ответ: ${selectedText}`,
@@ -282,7 +283,7 @@ const handleAnswer = async (
 
 const handleTextAnswer = async (chatId: number, text: string) => {
   const session = await getSessionByUserId(chatId);
-  if (!session || !session.current || session.mode !== "write") {
+  if (!session || !session.current || session.mode !== TrainingMode.Write) {
     await safePutMetric("InvalidAnswer", 1, { Reason: "no_session", Mode: "write", Level: "unknown" });
     await safePutMetric("InvalidAnswerTotal", 1, {});
     return sendMessage(chatId, "Нет активной тренировки. Напишите /start.");
@@ -366,13 +367,14 @@ const handleCallback = (update: TelegramUpdate) =>
         )
     )
     .map(({ chatId, messageId, callbackId, data }) => {
-      if (data === "mode:ru-gr" || data === "mode:gr-ru" || data === "mode:write") {
-        const mode = (data.split(":")[1] ?? "gr-ru") as Session["mode"];
-        return handleMode(chatId, messageId, callbackId, mode);
+      if (data.startsWith("mode:")) {
+        const mode = data.split(":")[1] as TrainingMode;
+        const selectedMode = Object.values(TrainingMode).includes(mode) ? mode : TrainingMode.GrRu;
+        return handleMode(chatId, messageId, callbackId, selectedMode);
       }
       const levelMatch = data.match(/^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru|write)$/);
       if (levelMatch) {
-        return handleLevel(chatId, messageId, callbackId, levelMatch[1], levelMatch[2] as Session["mode"]);
+        return handleLevel(chatId, messageId, callbackId, levelMatch[1], levelMatch[2] as TrainingMode);
       }
       const answerMatch = data.match(/^s=([^&]+)&a=(\d+)$/);
       if (answerMatch) {
