@@ -1,81 +1,115 @@
 import https from "https";
-import { config } from "./config";
+import type { APIGatewayProxyEventV2 } from "aws-lambda";
+import {
+  TelegramInlineKeyboard,
+  TelegramKeyboardButton,
+  TelegramResponse,
+  TelegramUpdateMessage,
+} from "./telegram-types";
 
-export type TelegramKeyboardButton = {
-  text: string;
-  callback_data: string;
-};
+/**
+ * Клиент для вызовов Telegram Bot API.
+ */
+export class TelegramService {
+  constructor(private readonly token: string) {}
 
-export type TelegramInlineKeyboard = {
-  inline_keyboard: TelegramKeyboardButton[][];
-};
-
-type TelegramResponse<T> = {
-  ok: boolean;
-  result?: T;
-  description?: string;
-};
-
-const telegramRequest = async <T>(method: string, payload: Record<string, unknown>) => {
-  if (!config.telegramToken) {
-    throw new Error("Missing TELEGRAM_TOKEN");
+  /**
+   * Преобразует входящий event из API Gateway в TelegramUpdateMessage.
+   */
+  parseUpdate(event: APIGatewayProxyEventV2): TelegramUpdateMessage {
+    if (!event.body) {
+      return TelegramUpdateMessage.fromJson({});
+    }
+    const rawBody = event.isBase64Encoded
+      ? Buffer.from(event.body, "base64").toString("utf-8")
+      : event.body;
+    try {
+      return TelegramUpdateMessage.fromJson(JSON.parse(rawBody));
+    } catch {
+      return TelegramUpdateMessage.fromJson({});
+    }
   }
 
-  const body = JSON.stringify(payload);
-  return new Promise<TelegramResponse<T>>((resolve, reject) => {
-    const req = https.request(
-      `https://api.telegram.org/bot${config.telegramToken}/${method}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
+  /**
+   * Отправляет сообщение в чат.
+   */
+  sendMessage(chatId: number, text: string, keyboard?: TelegramInlineKeyboard) {
+    return this.request<{ message_id: number }>("sendMessage", {
+      chat_id: chatId,
+      text,
+      reply_markup: keyboard,
+    });
+  }
+
+  /**
+   * Редактирует текст сообщения.
+   */
+  editMessageText(
+    chatId: number,
+    messageId: number,
+    text: string,
+    keyboard?: TelegramInlineKeyboard,
+  ) {
+    return this.request("editMessageText", {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      reply_markup: keyboard,
+    });
+  }
+
+  /**
+   * Подтверждает callback-кнопку.
+   */
+  answerCallback(callbackQueryId: string) {
+    return this.request("answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+    });
+  }
+
+  private request<T>(method: string, payload: Record<string, unknown>) {
+    if (!this.token) {
+      throw new Error("Missing TELEGRAM_TOKEN");
+    }
+    const body = JSON.stringify(payload);
+    return new Promise<TelegramResponse<T>>((resolve, reject) => {
+      const req = https.request(
+        `https://api.telegram.org/bot${this.token}/${method}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(body),
+          },
         },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const parsed = JSON.parse(data) as TelegramResponse<T>;
-            resolve(parsed);
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }
-    );
-    req.on("error", reject);
-    req.write(body);
-    req.end();
-  });
-};
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            try {
+              const parsed = JSON.parse(data) as TelegramResponse<T>;
+              resolve(parsed);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        },
+      );
+      req.on("error", reject);
+      req.write(body);
+      req.end();
+    });
+  }
+}
 
-export const sendMessage = (chatId: number, text: string, keyboard?: TelegramInlineKeyboard) =>
-  telegramRequest<{ message_id: number }>("sendMessage", {
-    chat_id: chatId,
-    text,
-    reply_markup: keyboard,
-  });
-
-export const editMessageText = (
-  chatId: number,
-  messageId: number,
-  text: string,
-  keyboard?: TelegramInlineKeyboard
-) =>
-  telegramRequest("editMessageText", {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    reply_markup: keyboard,
-  });
-
-export const answerCallback = (callbackQueryId: string) =>
-  telegramRequest("answerCallbackQuery", {
-    callback_query_id: callbackQueryId,
-  });
-
-export const keyboard = (rows: TelegramKeyboardButton[][]): TelegramInlineKeyboard => ({
-  inline_keyboard: rows,
-});
+/**
+ * Утилиты для работы с клавиатурами.
+ */
+export class TelegramKeyboard {
+  /**
+   * Создает inline-клавиатуру из рядов кнопок.
+   */
+  static inline(rows: TelegramKeyboardButton[][]): TelegramInlineKeyboard {
+    return { inline_keyboard: rows };
+  }
+}

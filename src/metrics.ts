@@ -1,4 +1,7 @@
-import { CloudWatchClient, PutMetricDataCommand } from "@aws-sdk/client-cloudwatch";
+import {
+  CloudWatchClient,
+  PutMetricDataCommand,
+} from "@aws-sdk/client-cloudwatch";
 
 const client = new CloudWatchClient({});
 
@@ -10,7 +13,7 @@ const toDimensions = (dimensions: MetricDimensions) =>
 export const putMetric = async (
   metricName: string,
   value: number,
-  dimensions: MetricDimensions
+  dimensions: MetricDimensions,
 ) => {
   const command = new PutMetricDataCommand({
     Namespace: "GreekBot",
@@ -29,7 +32,7 @@ export const putMetric = async (
 export const safePutMetric = async (
   metricName: string,
   value: number,
-  dimensions: MetricDimensions
+  dimensions: MetricDimensions,
 ) => {
   try {
     await putMetric(metricName, value, dimensions);

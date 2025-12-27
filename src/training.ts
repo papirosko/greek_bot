@@ -1,3 +1,6 @@
+/**
+ * Режимы тренировки, которые поддерживает бот.
+ */
 export enum TrainingMode {
   GrRu = "gr-ru",
   RuGr = "ru-gr",

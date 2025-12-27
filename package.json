@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "lint": "echo 'no lint configured'",
+    "lint": "eslint .",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -15,8 +15,14 @@
     "scats": "1.4.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.9.0",
     "@types/aws-lambda": "^8.10.147",
     "@types/node": "^20.11.19",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
     "typescript": "^5.4.5"
   }
 }
