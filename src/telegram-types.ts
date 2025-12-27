@@ -11,6 +11,8 @@ export class TelegramChat {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New TelegramChat instance.
    */
   copy(o: Partial<TelegramChat>) {
     return new TelegramChat(option(o.id).getOrElseValue(this.id));
@@ -34,6 +36,8 @@ export class TelegramMessage {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New TelegramMessage instance.
    */
   copy(o: Partial<TelegramMessage>) {
     return new TelegramMessage(
@@ -59,6 +63,8 @@ export class TelegramCallbackQueryMessage {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New TelegramCallbackQueryMessage instance.
    */
   copy(o: Partial<TelegramCallbackQueryMessage>) {
     return new TelegramCallbackQueryMessage(
@@ -85,6 +91,8 @@ export class TelegramCallbackQuery {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New TelegramCallbackQuery instance.
    */
   copy(o: Partial<TelegramCallbackQuery>) {
     return new TelegramCallbackQuery(
@@ -112,6 +120,8 @@ export class TelegramUpdateMessage {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New TelegramUpdateMessage instance.
    */
   copy(o: Partial<TelegramUpdateMessage>) {
     return new TelegramUpdateMessage(
@@ -124,8 +134,11 @@ export class TelegramUpdateMessage {
 
   /**
    * Создает DTO из произвольного JSON.
+   * @param payload Raw JSON payload.
+   * @returns Parsed TelegramUpdateMessage instance.
    */
   static fromJson(payload: unknown) {
+    // Normalize unknown values to objects.
     const asObject = (value: unknown) =>
       value && typeof value === "object"
         ? (value as Record<string, unknown>)
@@ -133,6 +146,7 @@ export class TelegramUpdateMessage {
 
     const root = asObject(payload);
 
+    // Parse standard message payload if present.
     const message = option(root.message).map((raw) => {
       const msg = asObject(raw);
       const chat = option(msg.chat).map((rawChat) => {
@@ -144,6 +158,7 @@ export class TelegramUpdateMessage {
       return new TelegramMessage(chat, text, messageId);
     });
 
+    // Parse callback query payload if present.
     const callbackQuery = option(root.callback_query).map((raw) => {
       const cb = asObject(raw);
       const messageCb = option(cb.message).map((rawMessage) => {

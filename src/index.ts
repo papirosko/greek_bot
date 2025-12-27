@@ -12,6 +12,9 @@ import { QuestionGenerator } from "./question-generator";
 import { MenuService } from "./menu-service";
 import { GameFactory } from "./games/game-factory";
 
+/**
+ * Load and validate configuration from the environment.
+ */
 const config = ConfigLoader.loadConfig();
 config.valid().match({
   left: (message) => {
@@ -20,6 +23,9 @@ config.valid().match({
   right: () => undefined,
 });
 
+/**
+ * Construct service singletons for the Lambda runtime.
+ */
 const telegramService = new TelegramService(config.telegramToken);
 const metricsService = new MetricsService();
 const sheetsService = new GoogleSpreadsheetsService(
@@ -49,14 +55,21 @@ const quiz = new Quiz(
   config.sheetsId,
 );
 
+/**
+ * AWS Lambda entrypoint.
+ * @param event API Gateway event payload.
+ * @returns API Gateway response.
+ */
 export const handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   try {
+    // Parse update and route to the quiz orchestrator.
     const update = telegramService.parseUpdate(event);
     await quiz.handleUpdate(update);
     return { statusCode: 200, body: "ok" };
   } catch (error) {
+    // Report handler errors via metrics without failing the webhook.
     console.error("handler_error", error);
     await metricsService.safePutMetric("Error", 1, { Stage: "handler" });
     await metricsService.safePutMetric("ErrorTotal", 1, {});

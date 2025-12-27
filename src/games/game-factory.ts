@@ -24,9 +24,24 @@ type TextGameInvocation = {
   input: TextGameInput;
 };
 
+/**
+ * Union describing a resolved game instance and input.
+ */
 export type GameInvocation = ChoiceGameInvocation | TextGameInvocation;
 
+/**
+ * Factory that creates games and resolves updates to inputs.
+ */
 export class GameFactory {
+  /**
+   * @param telegramService Telegram API client.
+   * @param sessionsRepository Session persistence repository.
+   * @param questionGenerator Question builder with randomized options.
+   * @param menuService Menu sender for top-level navigation.
+   * @param sheetsService Google Sheets data reader.
+   * @param metricsService CloudWatch metrics client.
+   * @param spreadsheetId Google Sheets spreadsheet id.
+   */
   constructor(
     private readonly telegramService: TelegramService,
     private readonly sessionsRepository: SessionsRepository,
@@ -37,12 +52,22 @@ export class GameFactory {
     private readonly spreadsheetId: string,
   ) {}
 
+  /**
+   * Returns a game instance for the given training mode.
+   * @param mode Selected training mode.
+   * @returns Game instance handling that mode.
+   */
   forMode(mode: TrainingMode) {
     return mode === TrainingMode.Write
       ? this.createTextGame()
       : this.createChoiceGame();
   }
 
+  /**
+   * Resolves a Telegram update into a game invocation if possible.
+   * @param update Incoming Telegram update DTO.
+   * @returns Option with game and input.
+   */
   forUpdate(update: TelegramUpdateMessage): Option<GameInvocation> {
     const choiceGame = this.createChoiceGame();
     const choiceInput = choiceGame.buildInput(update);
@@ -69,6 +94,10 @@ export class GameFactory {
     return none;
   }
 
+  /**
+   * Builds a choice-game instance.
+   * @returns ChoiceGame instance.
+   */
   private createChoiceGame() {
     return new ChoiceGame(
       this.telegramService,
@@ -81,6 +110,10 @@ export class GameFactory {
     );
   }
 
+  /**
+   * Builds a text-game instance.
+   * @returns TextGame instance.
+   */
   private createTextGame() {
     return new TextGame(
       this.telegramService,

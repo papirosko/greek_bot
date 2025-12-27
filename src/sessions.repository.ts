@@ -18,6 +18,9 @@ import { TimeUtils } from "./time-utils";
 export class SessionsRepository {
   private readonly docClient: DynamoDBDocumentClient;
 
+  /**
+   * @param tableName DynamoDB table name.
+   */
   constructor(private readonly tableName: string) {
     const client = new DynamoDBClient({});
     this.docClient = DynamoDBDocumentClient.from(client, {
@@ -25,6 +28,14 @@ export class SessionsRepository {
     });
   }
 
+  /**
+   * Creates a new session with default counters.
+   * @param userId Telegram user id.
+   * @param level Training level.
+   * @param mode Training mode.
+   * @param remainingIds Remaining term ids.
+   * @returns New Session instance.
+   */
   createSession(
     userId: number,
     level: string,
@@ -48,6 +59,8 @@ export class SessionsRepository {
 
   /**
    * Сохраняет сессию и обновляет метку времени.
+   * @param session Session to store.
+   * @returns Updated session with refreshed timestamp.
    */
   async putSession(session: Session) {
     const updated = session.copy({ updatedAt: TimeUtils.nowSeconds() });
@@ -62,6 +75,8 @@ export class SessionsRepository {
 
   /**
    * Загружает сессию по id.
+   * @param sessionId Session id.
+   * @returns Option with session if present.
    */
   async getSession(sessionId: string): Promise<Option<Session>> {
     const response = await this.docClient.send(
@@ -77,6 +92,8 @@ export class SessionsRepository {
 
   /**
    * Загружает последнюю сессию пользователя.
+   * @param userId Telegram user id.
+   * @returns Option with latest session if present.
    */
   async getSessionByUserId(userId: number): Promise<Option<Session>> {
     const response = await this.docClient.send(
@@ -97,6 +114,8 @@ export class SessionsRepository {
 
   /**
    * Удаляет сессию.
+   * @param sessionId Session id.
+   * @returns Promise resolved when deletion completes.
    */
   async deleteSession(sessionId: string) {
     await this.docClient.send(

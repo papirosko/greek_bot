@@ -10,7 +10,19 @@ import { SessionsRepository } from "../sessions.repository";
 import { QuestionGenerator } from "../question-generator";
 import { MenuService } from "../menu-service";
 
+/**
+ * Text-input game implementation.
+ */
 export class TextGame extends BaseGame<TextGameInput> {
+  /**
+   * @param telegramService Telegram API client.
+   * @param sessionsRepository Session persistence repository.
+   * @param questionGenerator Question builder with randomized options.
+   * @param menuService Menu sender for top-level navigation.
+   * @param sheetsService Google Sheets data reader.
+   * @param metricsService CloudWatch metrics client.
+   * @param spreadsheetId Google Sheets spreadsheet id.
+   */
   constructor(
     telegramService: TelegramService,
     sessionsRepository: SessionsRepository,
@@ -29,6 +41,11 @@ export class TextGame extends BaseGame<TextGameInput> {
     );
   }
 
+  /**
+   * Builds a text-game input from a Telegram update.
+   * @param update Incoming Telegram update DTO.
+   * @returns Option with parsed text input, or none.
+   */
   buildInput(update: TelegramUpdateMessage): Option<TextGameInput> {
     return update.message.flatMap((message) =>
       message.chat.flatMap((chat) =>
@@ -37,7 +54,13 @@ export class TextGame extends BaseGame<TextGameInput> {
     );
   }
 
+  /**
+   * Handles a single text answer input.
+   * @param input Parsed text game input.
+   * @returns Promise resolved when processing is complete.
+   */
   async invoke(input: TextGameInput): Promise<void> {
+    // Validate session existence and required mode.
     const sessionOption = await this.sessionsRepository.getSessionByUserId(
       input.chatId,
     );
@@ -53,6 +76,7 @@ export class TextGame extends BaseGame<TextGameInput> {
       return;
     }
 
+    // Normalize user input and validate it is not empty.
     const current = session.current.getOrElseThrow(
       () => new Error("Missing current question"),
     );
@@ -71,6 +95,7 @@ export class TextGame extends BaseGame<TextGameInput> {
       return;
     }
 
+    // Load terms and compute result payload.
     const data = await this.sheetsService.loadDataBase(
       this.spreadsheetId,
       session.level.toUpperCase(),
@@ -93,6 +118,7 @@ export class TextGame extends BaseGame<TextGameInput> {
       isCorrect ? "✅ Верно" : "❌ Неверно",
     ].join("\n");
 
+    // Update message, emit metrics, and progress the session.
     const resultMessageId = updated.current.flatMap(
       (question) => question.messageId,
     ).orUndefined;
@@ -117,6 +143,7 @@ export class TextGame extends BaseGame<TextGameInput> {
       {},
     );
 
+    // Build next question or finish the session.
     const nextPack = this.questionGenerator.createQuestion(
       data.get(session.mode),
       updated.remainingIds.toSet,
@@ -144,10 +171,20 @@ export class TextGame extends BaseGame<TextGameInput> {
     await this.sendQuestion(nextSession, terms);
   }
 
+  /**
+   * Normalizes a user input string for comparison.
+   * @param value Input string.
+   * @returns Normalized string.
+   */
   private normalizeInput(value: string) {
     return value.trim().toLowerCase();
   }
 
+  /**
+   * Removes Greek accents for loose comparison.
+   * @param value Input string.
+   * @returns String without accents.
+   */
   private removeGreekAccents(value: string) {
     return value
       .normalize("NFD")
@@ -155,10 +192,21 @@ export class TextGame extends BaseGame<TextGameInput> {
       .normalize("NFC");
   }
 
+  /**
+   * Checks if the input contains Greek accent marks.
+   * @param value Input string.
+   * @returns True if accents are present.
+   */
   private hasGreekAccent(value: string) {
     return /[\u0300\u0301\u0342\u0344\u0345]/.test(value.normalize("NFD"));
   }
 
+  /**
+   * Compares user input with the correct answer using accent rules.
+   * @param input User input.
+   * @param correct Correct answer.
+   * @returns True when the input matches.
+   */
   private matchesGreekInput(input: string, correct: string) {
     const normalizedInput = this.normalizeInput(input);
     const normalizedCorrect = this.normalizeInput(correct);
@@ -171,6 +219,11 @@ export class TextGame extends BaseGame<TextGameInput> {
     return normalizedInput === normalizedCorrect;
   }
 
+  /**
+   * Reports missing session errors and informs the user.
+   * @param chatId Telegram chat id.
+   * @returns Promise resolved when the warning is sent.
+   */
   private async reportNoSession(chatId: number) {
     await this.metricsService.safePutMetric("InvalidAnswer", 1, {
       Reason: "no_session",

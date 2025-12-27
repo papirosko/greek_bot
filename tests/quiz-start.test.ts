@@ -11,7 +11,16 @@ import { NullMetricsService } from "./mock/null-metrics-service";
 import { InMemorySessionsRepository } from "./mock/in-memory-sessions-repository";
 import { DummySheetsService, TermRow } from "./mock/dummy-sheets-service";
 
+/**
+ * Deterministic question generator for stable test expectations.
+ */
 class DeterministicQuestionGenerator {
+  /**
+   * Builds a predictable question pack (first remaining id first).
+   * @param terms Collection of terms.
+   * @param remainingIds Remaining term ids.
+   * @returns Question pack or null when done.
+   */
   createQuestion(terms: Collection<Term>, remainingIds: HashSet<number>) {
     if (remainingIds.isEmpty) {
       return null;
@@ -183,6 +192,7 @@ describe("Quiz start", () => {
   });
 
   it("starts gr-ru choice game and sends first question", async () => {
+    // Trigger level selection and start the session.
     const update = createTgCallback(
       999,
       55,
@@ -192,6 +202,7 @@ describe("Quiz start", () => {
 
     await quiz.handleUpdate(update);
 
+    // Verify the first question and answer options.
     expect(telegramService.sentMessages.length).toBe(1);
     expect(telegramService.sentMessages[0]).toMatchObject({
       chatId: 999,
@@ -227,6 +238,7 @@ describe("Quiz start", () => {
     const chatId = 444;
     const questionMessageId = 1;
 
+    // Start a session and capture the initial question.
     await quiz.handleUpdate(
       createTgCallback(chatId, 10, "level:a1|mode:gr-ru", "cb-level"),
     );
@@ -237,6 +249,7 @@ describe("Quiz start", () => {
       telegramService.sentMessages[0].keyboard,
     );
 
+    // Answer correctly and expect edited result plus next question.
     await quiz.handleUpdate(
       createTgCallback(
         chatId,
@@ -257,6 +270,7 @@ describe("Quiz start", () => {
       telegramService.sentMessages[1].keyboard,
     );
 
+    // Answer incorrectly and expect another edit plus next question.
     await quiz.handleUpdate(
       createTgCallback(
         chatId,

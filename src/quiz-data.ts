@@ -10,6 +10,11 @@ export class Term {
     readonly greek: string,
   ) {}
 
+  /**
+   * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New Term instance.
+   */
   copy(o: Partial<Term>) {
     return new Term(
       option(o.russian).getOrElseValue(this.russian),
@@ -26,6 +31,8 @@ export class QuizDataBase {
 
   /**
    * Возвращает копию базы с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New QuizDataBase instance.
    */
   copy(o: Partial<QuizDataBase>) {
     return new QuizDataBase(
@@ -33,10 +40,20 @@ export class QuizDataBase {
     );
   }
 
+  /**
+   * Returns terms for a training mode.
+   * @param mode Training mode.
+   * @returns Collection of terms.
+   */
   get(mode: TrainingMode) {
     return this.quizzesData.getOrElseValue(mode, Collection.empty);
   }
 
+  /**
+   * Creates a database with the same term set for all modes.
+   * @param terms Collection of terms.
+   * @returns QuizDataBase instance.
+   */
   static forAllModes(terms: Collection<Term>) {
     return new QuizDataBase(
       HashMap.of(

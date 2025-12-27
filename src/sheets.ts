@@ -20,6 +20,10 @@ type CachedLevel = {
 export class GoogleSpreadsheetsService {
   private readonly cache = new Map<string, CachedLevel>();
 
+  /**
+   * @param serviceAccountJson Google service account JSON.
+   * @param cacheTtlMs Cache TTL in milliseconds.
+   */
   constructor(
     private readonly serviceAccountJson: string,
     private readonly cacheTtlMs: number,
@@ -27,15 +31,20 @@ export class GoogleSpreadsheetsService {
 
   /**
    * Загружает базу терминов для указанного уровня.
+   * @param spreadsheetId Google Sheets id.
+   * @param level Training level key.
+   * @returns QuizDataBase for the level.
    */
   async loadDataBase(
     spreadsheetId: string,
     level: string,
   ): Promise<QuizDataBase> {
+    // Return cached data when still fresh.
     const cached = this.cache.get(`${spreadsheetId}:${level}`);
     if (cached && Date.now() - cached.fetchedAt < this.cacheTtlMs) {
       return cached.data;
     }
+    // Fetch and cache the data from the API.
     const data = await this.fetchLevel(spreadsheetId, level);
     this.cache.set(`${spreadsheetId}:${level}`, {
       data,
@@ -44,6 +53,10 @@ export class GoogleSpreadsheetsService {
     return data;
   }
 
+  /**
+   * Parses and validates the service account credentials.
+   * @returns Parsed service account data.
+   */
   private parseServiceAccount(): ServiceAccount {
     if (!this.serviceAccountJson) {
       throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_JSON");
@@ -57,7 +70,13 @@ export class GoogleSpreadsheetsService {
     return parsed as ServiceAccount;
   }
 
+  /**
+   * Requests an OAuth token using a JWT assertion.
+   * @param account Parsed service account data.
+   * @returns Access token string.
+   */
   private requestToken(account: ServiceAccount) {
+    // Build JWT claims and signed assertion.
     const now = Math.floor(Date.now() / 1000);
     const header = { alg: "RS256", typ: "JWT" };
     const claims = {
@@ -80,6 +99,7 @@ export class GoogleSpreadsheetsService {
       .replace(/\//g, "_");
     const jwt = `${toSign}.${signature}`;
 
+    // Exchange JWT for an access token.
     const body = new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion: jwt,
@@ -118,15 +138,23 @@ export class GoogleSpreadsheetsService {
     });
   }
 
+  /**
+   * Fetches a level range from Google Sheets.
+   * @param spreadsheetId Google Sheets id.
+   * @param level Training level key.
+   * @returns QuizDataBase for the level.
+   */
   private async fetchLevel(
     spreadsheetId: string,
     level: string,
   ): Promise<QuizDataBase> {
+    // Resolve token and build the Sheets API request.
     const account = this.parseServiceAccount();
     const token = await this.requestToken(account);
     const range = `${encodeURIComponent(level)}!A2:B`;
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?majorDimension=ROWS`;
 
+    // Fetch values and map them into terms.
     return new Promise((resolve, reject) => {
       const req = https.request(
         url,

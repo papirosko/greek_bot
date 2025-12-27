@@ -4,6 +4,8 @@
 export class Base64Utils {
   /**
    * Кодирует строку в base64url (без паддинга).
+   * @param input Input string.
+   * @returns Base64url-encoded string.
    */
   static toUrl(input: string) {
     return Buffer.from(input)

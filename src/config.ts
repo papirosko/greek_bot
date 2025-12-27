@@ -4,6 +4,13 @@ import { Either, left, option, right } from "scats";
  * Конфигурация приложения, загружаемая из переменных окружения.
  */
 export class Config {
+  /**
+   * @param telegramToken Telegram bot token.
+   * @param sheetsId Google Sheets id.
+   * @param serviceAccountJson Google service account JSON.
+   * @param sessionsTable DynamoDB sessions table name.
+   * @param sheetsCacheTtlMs Sheets cache TTL in ms.
+   */
   constructor(
     readonly telegramToken: string,
     readonly sheetsId: string,
@@ -14,6 +21,8 @@ export class Config {
 
   /**
    * Возвращает копию конфигурации с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New Config instance.
    */
   copy(o: Partial<Config>) {
     return new Config(
@@ -27,6 +36,7 @@ export class Config {
 
   /**
    * Валидирует обязательные параметры конфигурации.
+   * @returns Either with error message or void.
    */
   valid(): Either<string, void> {
     if (!this.telegramToken) {
@@ -51,6 +61,7 @@ export class Config {
 export class ConfigLoader {
   /**
    * Считывает переменные окружения и возвращает Config.
+   * @returns Config loaded from environment.
    */
   static loadConfig(): Config {
     return new Config(

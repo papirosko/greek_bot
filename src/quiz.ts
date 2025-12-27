@@ -14,6 +14,16 @@ import { MetadataSerDe } from "./metadata-serde";
  * Логика тренировки: вопросы, ответы, сессии.
  */
 export class Quiz {
+  /**
+   * @param telegramService Telegram API client.
+   * @param sheetsService Google Sheets data reader.
+   * @param sessionsRepository Session persistence repository.
+   * @param questionGenerator Question builder with randomized options.
+   * @param metricsService CloudWatch metrics client.
+   * @param menuService Menu sender for top-level navigation.
+   * @param gameFactory Factory for game instances and inputs.
+   * @param spreadsheetId Google Sheets spreadsheet id.
+   */
   constructor(
     private readonly telegramService: TelegramService,
     private readonly sheetsService: GoogleSpreadsheetsService,
@@ -27,11 +37,16 @@ export class Quiz {
 
   /**
    * Обрабатывает входящее обновление Telegram.
+   * @param update Incoming Telegram update DTO.
+   * @returns Promise resolved when the update is handled.
    */
   async handleUpdate(update: TelegramUpdateMessage) {
+    // Handle callback queries regardless of message presence.
+    await this.handleCallback(update);
     return await update.message
       .flatMap((message) => message.chat.map((chat) => chat.id))
       .mapPromise(async (chatId) => {
+        // Normalize message text and route commands or answers.
         await update.message
           .flatMap((message) => message.text)
           .map((text) => text.trim().toLowerCase())
@@ -59,11 +74,14 @@ export class Quiz {
               );
             }
           });
-
-        await this.handleCallback(update);
       });
   }
 
+  /**
+   * Builds the level selection keyboard for a given mode.
+   * @param mode Training mode for callback data.
+   * @returns Inline keyboard payload.
+   */
   private buildLevelKeyboard(mode: TrainingMode) {
     return TelegramKeyboard.inline([
       [
@@ -77,10 +95,23 @@ export class Quiz {
     ]);
   }
 
+  /**
+   * Sends the main menu to a user.
+   * @param chatId Telegram chat id.
+   * @returns Promise resolved when the message is sent.
+   */
   private handleStart(chatId: number) {
     return this.menuService.sendStart(chatId);
   }
 
+  /**
+   * Handles mode selection callbacks.
+   * @param chatId Telegram chat id.
+   * @param messageId Telegram message id to edit.
+   * @param callbackId Callback query id.
+   * @param mode Selected training mode.
+   * @returns Promise resolved when the menu is updated.
+   */
   private handleMode(
     chatId: number,
     messageId: number,
@@ -98,6 +129,11 @@ export class Quiz {
     ]);
   }
 
+  /**
+   * Formats a human-readable label for a training mode.
+   * @param mode Training mode.
+   * @returns Localized label.
+   */
   private formatModeLabel(mode: TrainingMode) {
     if (mode === TrainingMode.RuGr) {
       return "Перевод (RU → GR)";
@@ -108,6 +144,15 @@ export class Quiz {
     return "Перевод (GR → RU)";
   }
 
+  /**
+   * Handles level selection callbacks and starts a session.
+   * @param chatId Telegram chat id.
+   * @param messageId Telegram message id to edit.
+   * @param callbackId Callback query id.
+   * @param level Selected level.
+   * @param mode Selected training mode.
+   * @returns Promise resolved when the session is started or aborted.
+   */
   private async handleLevel(
     chatId: number,
     messageId: number,
@@ -115,6 +160,7 @@ export class Quiz {
     level: string,
     mode: TrainingMode,
   ) {
+    // Acknowledge the callback and update the menu message.
     await Promise.all([
       this.telegramService.answerCallback(callbackId),
       this.telegramService.editMessageText(
@@ -124,6 +170,7 @@ export class Quiz {
       ),
     ]);
 
+    // Load terms for the selected level.
     const data = await this.sheetsService.loadDataBase(
       this.spreadsheetId,
       level.toUpperCase(),
@@ -137,6 +184,7 @@ export class Quiz {
       return;
     }
 
+    // Create a session and persist the first question.
     const ids = Collection.fill<number>(terms.length)((index) => index);
     const session = this.sessionsRepository.createSession(
       chatId,
@@ -156,6 +204,7 @@ export class Quiz {
       return;
     }
 
+    // Persist and emit metrics, then send the first question.
     const updated = session.copy({
       current: some(questionPack.question),
       remainingIds: questionPack.remaining.toCollection,
@@ -169,8 +218,14 @@ export class Quiz {
     await this.gameFactory.forMode(mode).sendQuestion(updated, terms);
   }
 
+  /**
+   * Routes callback queries to menu handlers or games.
+   * @param update Incoming Telegram update DTO.
+   * @returns Promise resolved after routing.
+   */
   private handleCallback(update: TelegramUpdateMessage) {
     return update.callbackQuery.mapPromise(async (query) => {
+      // Try metadata-based routing for menu actions.
       const metadataHandled = await MetadataSerDe.fromUpdate(update).mapPromise(
         async (metadata) => {
           if (metadata.data.startsWith("mode:")) {
@@ -184,6 +239,7 @@ export class Quiz {
             return true;
           }
 
+          // Parse level selection and route accordingly.
           const levelMeta = MetadataSerDe.parseLevel(metadata.data);
           if (levelMeta.isDefined) {
             const parsed = levelMeta.getOrElseThrow(
@@ -206,6 +262,7 @@ export class Quiz {
         return;
       }
 
+      // Route to game handlers or acknowledge the callback.
       const invocation = this.gameFactory.forUpdate(update);
       if (invocation.isDefined) {
         await invocation.mapPromise((item) =>
@@ -220,7 +277,13 @@ export class Quiz {
     });
   }
 
+  /**
+   * Removes the active session for a user if present.
+   * @param userId Telegram user id.
+   * @returns Promise resolved when deletion completes.
+   */
   private async clearActiveSession(userId: number) {
+    // Delete the current active session if it exists.
     const activeOption =
       await this.sessionsRepository.getSessionByUserId(userId);
     await activeOption.mapPromise((active) =>

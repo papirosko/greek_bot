@@ -26,6 +26,8 @@ export class SessionQuestion {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New SessionQuestion instance.
    */
   copy(o: Partial<SessionQuestion>) {
     return new SessionQuestion(
@@ -38,6 +40,8 @@ export class SessionQuestion {
 
   /**
    * Создает вопрос из произвольного JSON.
+   * @param payload Raw JSON payload.
+   * @returns Parsed SessionQuestion instance.
    */
   static fromJson(payload: unknown) {
     const asObject = (value: unknown) =>
@@ -60,6 +64,7 @@ export class SessionQuestion {
 
   /**
    * Возвращает plain-объект для сохранения в хранилище.
+   * @returns Serializable representation.
    */
   get item(): SessionQuestionItem {
     return {

@@ -49,6 +49,8 @@ export class Session {
 
   /**
    * Возвращает копию с частичными изменениями.
+   * @param o Partial updates.
+   * @returns New Session instance.
    */
   copy(o: Partial<Session>) {
     return new Session(
@@ -70,6 +72,7 @@ export class Session {
 
   /**
    * Возвращает plain-объект для сохранения в хранилище.
+   * @returns Serializable representation.
    */
   get item(): SessionItem {
     return {
@@ -89,6 +92,8 @@ export class Session {
 
   /**
    * Создает сессию из произвольного JSON.
+   * @param payload Raw JSON payload.
+   * @returns Parsed Session instance.
    */
   static fromJson(payload: unknown): Session {
     const asObject = (value: unknown) =>

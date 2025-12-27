@@ -8,13 +8,26 @@ export type MetricDimensions = Record<string, string>;
 const toDimensions = (dimensions: MetricDimensions) =>
   Object.entries(dimensions).map(([Name, Value]) => ({ Name, Value }));
 
+/**
+ * CloudWatch metrics client with safe wrapper.
+ */
 export class MetricsService {
   private readonly client: CloudWatchClient;
 
+  /**
+   * Creates a metrics client instance.
+   */
   constructor() {
     this.client = new CloudWatchClient({});
   }
 
+  /**
+   * Sends a metric to CloudWatch.
+   * @param metricName Metric name.
+   * @param value Metric value.
+   * @param dimensions Metric dimensions.
+   * @returns Promise resolved when the metric is sent.
+   */
   async putMetric(
     metricName: string,
     value: number,
@@ -34,6 +47,13 @@ export class MetricsService {
     await this.client.send(command);
   }
 
+  /**
+   * Sends a metric but swallows errors to avoid breaking the bot.
+   * @param metricName Metric name.
+   * @param value Metric value.
+   * @param dimensions Metric dimensions.
+   * @returns Promise resolved after attempting to send the metric.
+   */
   async safePutMetric(
     metricName: string,
     value: number,

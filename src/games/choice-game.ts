@@ -10,7 +10,19 @@ import { SessionsRepository } from "../sessions.repository";
 import { QuestionGenerator } from "../question-generator";
 import { MenuService } from "../menu-service";
 
+/**
+ * Multiple-choice game implementation.
+ */
 export class ChoiceGame extends BaseGame<ChoiceGameInput> {
+  /**
+   * @param telegramService Telegram API client.
+   * @param sessionsRepository Session persistence repository.
+   * @param questionGenerator Question builder with randomized options.
+   * @param menuService Menu sender for top-level navigation.
+   * @param sheetsService Google Sheets data reader.
+   * @param metricsService CloudWatch metrics client.
+   * @param spreadsheetId Google Sheets spreadsheet id.
+   */
   constructor(
     telegramService: TelegramService,
     sessionsRepository: SessionsRepository,
@@ -29,6 +41,11 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
     );
   }
 
+  /**
+   * Builds a choice-game input from a Telegram update.
+   * @param update Incoming Telegram update DTO.
+   * @returns Option with parsed choice input, or none.
+   */
   buildInput(update: TelegramUpdateMessage): Option<ChoiceGameInput> {
     return update.callbackQuery.flatMap((query) => {
       const matchOption = query.data.flatMap((data) =>
@@ -53,7 +70,13 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
     });
   }
 
+  /**
+   * Handles a single answer selection.
+   * @param input Parsed choice game input.
+   * @returns Promise resolved when processing is complete.
+   */
   async invoke(input: ChoiceGameInput): Promise<void> {
+    // Validate session existence and current question.
     const sessionOption = await this.sessionsRepository.getSession(
       input.sessionId,
     );
@@ -81,6 +104,7 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       return;
     }
 
+    // Ensure the callback refers to the active message.
     const current = session.current.getOrElseThrow(
       () => new Error("Missing current question"),
     );
@@ -95,6 +119,7 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       return;
     }
 
+    // Load terms and compute result payload.
     const data = await this.sheetsService.loadDataBase(
       this.spreadsheetId,
       session.level.toUpperCase(),
@@ -129,6 +154,7 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       isCorrect ? "✅ Верно" : "❌ Неверно",
     ].join("\n");
 
+    // Update message, emit metrics, and progress the session.
     await Promise.all([
       this.telegramService.answerCallback(input.callbackId),
       this.telegramService.editMessageText(
@@ -149,6 +175,7 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       {},
     );
 
+    // Build next question or finish the session.
     const nextPack = this.questionGenerator.createQuestion(
       data.get(session.mode),
       updated.remainingIds.toSet,
