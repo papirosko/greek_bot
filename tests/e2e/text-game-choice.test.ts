@@ -1,18 +1,13 @@
 import { Collection } from "scats";
 import { ActionType } from "../../src/action";
+import { TrainingMode } from "../../src/training";
 import { Test } from "../test-context";
 
-const extractSessionId = (keyboard?: unknown) => {
-  const payload = keyboard as {
-    inline_keyboard?: Array<Array<{ callback_data?: string }>>;
-  };
-  const firstRow = payload?.inline_keyboard?.[0];
-  const firstButton = firstRow?.[0];
-  const match = firstButton?.callback_data?.match(/^s=([^&]+)&a=\d+$/);
-  if (!match) {
-    throw new Error("Missing session id in keyboard");
+const extractSessionId = (payload?: { sessionId?: string }) => {
+  if (!payload?.sessionId) {
+    throw new Error("Missing session id in payload");
   }
-  return match[1];
+  return payload.sessionId;
 };
 
 describe("Quiz start game", () => {
@@ -45,38 +40,21 @@ describe("Quiz start game", () => {
           payload: {
             chatId: 999,
             messageId: 55,
-            text: "Выбран Перевод (GR → RU) уровень A1.",
+            action: "renderLevelSelected",
+            mode: TrainingMode.GrRu,
+            level: "a1",
           },
         },
         {
           type: ActionType.SendTgMessage,
           payload: {
             chatId: 999,
-            text: "Вопрос 1/4\nПереведи: αλφα",
-            keyboard: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "alpha",
-                    callback_data: expect.stringMatching(/^s=.*&a=0$/),
-                  },
-                  {
-                    text: "beta",
-                    callback_data: expect.stringMatching(/^s=.*&a=1$/),
-                  },
-                ],
-                [
-                  {
-                    text: "gamma",
-                    callback_data: expect.stringMatching(/^s=.*&a=2$/),
-                  },
-                  {
-                    text: "delta",
-                    callback_data: expect.stringMatching(/^s=.*&a=3$/),
-                  },
-                ],
-              ],
-            },
+            action: "renderQuestion",
+            currentQuestionIndex: 1,
+            totalQuestions: 4,
+            term: "αλφα",
+            options: ["alpha", "beta", "gamma", "delta"],
+            sessionId: expect.any(String),
           },
         },
       ),
@@ -94,8 +72,7 @@ describe("Quiz start game", () => {
 
     const baseActions = test.renderedActions.length;
     const sessionId = extractSessionId(
-      (test.renderedActions.toArray[2].payload as { keyboard?: unknown })
-        .keyboard,
+      test.renderedActions.toArray[2].payload as { sessionId?: string },
     );
 
     // Answer correctly and expect edited result plus next question.
@@ -122,49 +99,34 @@ describe("Quiz start game", () => {
           payload: {
             chatId,
             messageId: questionMessageId,
-            text: expect.stringContaining("✅ Верно"),
+            action: "renderAnswerResult",
+            currentQuestionIndex: 2,
+            totalQuestions: 4,
+            term: "αλφα",
+            answerText: "alpha",
+            correctText: "alpha",
+            isCorrect: true,
           },
         },
         {
           type: ActionType.SendTgMessage,
           payload: {
             chatId,
-            text: "Вопрос 2/4\nПереведи: βητα",
-            keyboard: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "beta",
-                    callback_data: expect.stringMatching(/^s=.*&a=0$/),
-                  },
-                  {
-                    text: "alpha",
-                    callback_data: expect.stringMatching(/^s=.*&a=1$/),
-                  },
-                ],
-                [
-                  {
-                    text: "gamma",
-                    callback_data: expect.stringMatching(/^s=.*&a=2$/),
-                  },
-                  {
-                    text: "delta",
-                    callback_data: expect.stringMatching(/^s=.*&a=3$/),
-                  },
-                ],
-              ],
-            },
+            action: "renderQuestion",
+            currentQuestionIndex: 2,
+            totalQuestions: 4,
+            term: "βητα",
+            options: ["beta", "alpha", "gamma", "delta"],
+            sessionId,
           },
         },
       ),
     );
 
     const nextSessionId = extractSessionId(
-      (
-        test.renderedActions.toArray[baseActions + 2].payload as {
-          keyboard?: unknown;
-        }
-      ).keyboard,
+      test.renderedActions.toArray[baseActions + 2].payload as {
+        sessionId?: string;
+      },
     );
 
     // Answer incorrectly and expect another edit plus next question.
@@ -191,38 +153,25 @@ describe("Quiz start game", () => {
           payload: {
             chatId,
             messageId: questionMessageId,
-            text: expect.stringContaining("❌ Неверно"),
+            action: "renderAnswerResult",
+            currentQuestionIndex: 3,
+            totalQuestions: 4,
+            term: "βητα",
+            answerText: "alpha",
+            correctText: "beta",
+            isCorrect: false,
           },
         },
         {
           type: ActionType.SendTgMessage,
           payload: {
             chatId,
-            text: "Вопрос 3/4\nПереведи: γαμμα",
-            keyboard: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "gamma",
-                    callback_data: expect.stringMatching(/^s=.*&a=0$/),
-                  },
-                  {
-                    text: "alpha",
-                    callback_data: expect.stringMatching(/^s=.*&a=1$/),
-                  },
-                ],
-                [
-                  {
-                    text: "beta",
-                    callback_data: expect.stringMatching(/^s=.*&a=2$/),
-                  },
-                  {
-                    text: "delta",
-                    callback_data: expect.stringMatching(/^s=.*&a=3$/),
-                  },
-                ],
-              ],
-            },
+            action: "renderQuestion",
+            currentQuestionIndex: 3,
+            totalQuestions: 4,
+            term: "γαμμα",
+            options: ["gamma", "alpha", "beta", "delta"],
+            sessionId: nextSessionId,
           },
         },
       ),

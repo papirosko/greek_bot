@@ -97,11 +97,11 @@ export abstract class LeveledBaseGame<
       remainingIds: questionPack.remaining.toCollection,
     });
     await this.sessionsRepository.putSession(updated);
-    await this.metricsService.safePutMetric("SessionStart", 1, {
+    await this.metricsService.counter("SessionStart").inc({
       Mode: updated.mode,
       Level: updated.level.toUpperCase(),
     });
-    await this.metricsService.safePutMetric("SessionStartTotal", 1, {});
+    await this.metricsService.counter("SessionStartTotal").inc();
 
     return actions.concat(this.sendQuestion(updated, terms));
   }

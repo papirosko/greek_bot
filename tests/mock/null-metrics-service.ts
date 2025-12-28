@@ -27,4 +27,18 @@ export class NullMetricsService {
     _value: number,
     _dimensions: Record<string, string>,
   ) {}
+
+  /**
+   * Returns a no-op counter helper.
+   * @param _metricName Metric name.
+   * @returns Counter helper.
+   */
+  counter(_metricName: string) {
+    return {
+      inc: async (
+        _valueOrDimensions?: number | Record<string, string>,
+        _dimensions: Record<string, string> = {},
+      ) => {},
+    };
+  }
 }

@@ -1,5 +1,5 @@
 import { Collection, Option, some } from "scats";
-import { Action } from "../action";
+import { Action, GameRenderPayload } from "../action";
 import { GoogleSpreadsheetsService } from "../sheets";
 import { MetricsService } from "../metrics";
 import { LeveledBaseGame } from "./leveled-base-game";
@@ -83,18 +83,19 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
     );
     const answer = this.normalizeInput(input.text);
     if (!answer) {
-      await this.metricsService.safePutMetric("InvalidAnswer", 1, {
+      await this.metricsService.counter("InvalidAnswer").inc({
         Reason: "empty",
         Mode: session.mode,
         Level: session.level.toUpperCase(),
       });
-      await this.metricsService.safePutMetric("InvalidAnswerTotal", 1, {});
-      return Collection.from([
+      await this.metricsService.counter("InvalidAnswerTotal").inc();
+      return Collection.of(
         Action.sendTgMessage({
           chatId: input.chatId,
-          text: "Ответ пустой. Напишите слово на греческом.",
+          action: "renderInvalidAnswer",
+          reason: "empty",
         }),
-      ]);
+      );
     }
 
     // Load terms and compute result payload.
@@ -112,41 +113,38 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
       correctCount: session.correctCount + (isCorrect ? 1 : 0),
     });
 
-    const resultText = [
-      `Вопрос ${this.currentQuestionNumber(updated)}/${this.totalQuestions(updated)}`,
-      `Переведи: ${questionTerm.russian}`,
-      `Ваш ответ: ${answer}`,
-      `Правильный ответ: ${questionTerm.greek}`,
-      isCorrect ? "✅ Верно" : "❌ Неверно",
-    ].join("\n");
-
     // Update message, emit metrics, and progress the session.
     const resultMessageId = updated.current.flatMap(
       (question) => question.messageId,
     ).orUndefined;
-    const resultActions = Collection.from([
+    const resultPayload = {
+      action: "renderAnswerResult",
+      chatId: input.chatId,
+      currentQuestionIndex: this.currentQuestionNumber(updated),
+      totalQuestions: this.totalQuestions(updated),
+      term: questionTerm.russian,
+      answerText: answer,
+      correctText: questionTerm.greek,
+      isCorrect,
+    } as const;
+
+    const resultActions = Collection.of(
       resultMessageId
         ? Action.updateLastMessage({
-            chatId: input.chatId,
+            ...resultPayload,
             messageId: resultMessageId,
-            text: resultText,
           })
-        : Action.sendTgMessage({
-            chatId: input.chatId,
-            text: resultText,
-          }),
-    ]);
-    await this.metricsService.safePutMetric("QuestionAnswered", 1, {
+        : Action.sendTgMessage(resultPayload),
+    );
+    await this.metricsService.counter("QuestionAnswered").inc({
       Mode: updated.mode,
       Level: updated.level.toUpperCase(),
       Result: isCorrect ? "correct" : "wrong",
     });
-    await this.metricsService.safePutMetric("QuestionAnsweredTotal", 1, {});
-    await this.metricsService.safePutMetric(
-      isCorrect ? "QuestionAnsweredCorrect" : "QuestionAnsweredWrong",
-      1,
-      {},
-    );
+    await this.metricsService.counter("QuestionAnsweredTotal").inc();
+    await this.metricsService
+      .counter(isCorrect ? "QuestionAnsweredCorrect" : "QuestionAnsweredWrong")
+      .inc();
 
     // Build next question or finish the session.
     const nextPack = this.questionGenerator.createQuestion(
@@ -155,19 +153,21 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
     );
     if (!nextPack) {
       await this.sessionsRepository.putSession(updated);
-      await this.metricsService.safePutMetric("SessionEnd", 1, {
+      await this.metricsService.counter("SessionEnd").inc({
         Mode: updated.mode,
         Level: updated.level.toUpperCase(),
       });
-      await this.metricsService.safePutMetric("SessionEndTotal", 1, {});
+      await this.metricsService.counter("SessionEndTotal").inc();
       return resultActions
         .concat(
-          Collection.from([
+          Collection.of(
             Action.sendTgMessage({
               chatId: input.chatId,
-              text: `Сессия завершена. Правильных: ${updated.correctCount} из ${updated.totalAsked}.`,
+              action: "renderSessionEnd",
+              correctCount: updated.correctCount,
+              totalAsked: updated.totalAsked,
             }),
-          ]),
+          ),
         )
         .concat(this.menuService.start(input.chatId));
     }
@@ -234,17 +234,60 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
    * @returns Promise resolved when the warning is sent.
    */
   private async reportNoSession(chatId: number) {
-    await this.metricsService.safePutMetric("InvalidAnswer", 1, {
+    await this.metricsService.counter("InvalidAnswer").inc({
       Reason: "no_session",
       Mode: "write",
       Level: "unknown",
     });
-    await this.metricsService.safePutMetric("InvalidAnswerTotal", 1, {});
-    return Collection.from([
+    await this.metricsService.counter("InvalidAnswerTotal").inc();
+    return Collection.of(
       Action.sendTgMessage({
         chatId,
-        text: "Нет активной тренировки. Напишите /start.",
+        action: "renderNoActiveSession",
       }),
-    ]);
+    );
+  }
+
+  /**
+   * Builds render data for text-game actions.
+   * @param payload Game render payload.
+   * @returns Rendered message data.
+   */
+  protected renderGamePayload(payload: GameRenderPayload) {
+    if (payload.action === "renderQuestion") {
+      return {
+        text: `Вопрос ${payload.currentQuestionIndex}/${payload.totalQuestions}\nПереведи: ${payload.term}`,
+      };
+    }
+    if (payload.action === "renderAnswerResult") {
+      const resultLine = payload.isCorrect ? "✅ Верно" : "❌ Неверно";
+      return {
+        text: [
+          `Вопрос ${payload.currentQuestionIndex}/${payload.totalQuestions}`,
+          `Переведи: ${payload.term}`,
+          `Ваш ответ: ${payload.answerText}`,
+          `Правильный ответ: ${payload.correctText}`,
+          resultLine,
+        ].join("\n"),
+      };
+    }
+    if (payload.action === "renderSessionEnd") {
+      return {
+        text: `Сессия завершена. Правильных: ${payload.correctCount} из ${payload.totalAsked}.`,
+      };
+    }
+    if (payload.action === "renderNoActiveSession") {
+      return {
+        text: "Нет активной тренировки. Напишите /start.",
+      };
+    }
+    if (payload.action === "renderInvalidAnswer") {
+      return {
+        text: "Ответ пустой. Напишите слово на греческом.",
+      };
+    }
+    return {
+      text: "Не удалось обработать действие.",
+    };
   }
 }

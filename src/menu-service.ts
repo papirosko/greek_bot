@@ -5,6 +5,7 @@ import {
   ActionType,
   AnswerCallbackPayload,
   EditMessageTextPayload,
+  MenuRenderPayload,
   SendMessagePayload,
   SetKeyboardPayload,
 } from "./action";
@@ -42,13 +43,12 @@ export class MenuService {
    * @returns Collection of renderable actions.
    */
   start(chatId: number) {
-    return Collection.from([
+    return Collection.of(
       Action.sendTgMessage({
         chatId,
-        text: "Выберите режим тренировки:",
-        keyboard: this.modeKeyboard,
+        action: "renderStartMenu",
       }),
-    ]);
+    );
   }
 
   /**
@@ -65,15 +65,15 @@ export class MenuService {
     callbackId: string,
     mode: TrainingMode,
   ) {
-    return Collection.from([
+    return Collection.of(
       Action.answerCallback({ callbackId }),
       Action.updateLastMessage({
         chatId,
         messageId,
-        text: `Режим: ${this.formatModeLabel(mode)}. Выберите уровень:`,
-        keyboard: this.buildLevelKeyboard(mode),
+        action: "renderModeSelected",
+        mode,
       }),
-    ]);
+    );
   }
 
   /**
@@ -92,14 +92,16 @@ export class MenuService {
     level: string,
     mode: TrainingMode,
   ) {
-    return Collection.from([
+    return Collection.of(
       Action.answerCallback({ callbackId }),
       Action.updateLastMessage({
         chatId,
         messageId,
-        text: `Выбран ${this.formatModeLabel(mode)} уровень ${level.toUpperCase()}.`,
+        action: "renderLevelSelected",
+        mode,
+        level,
       }),
-    ]);
+    );
   }
 
   /**
@@ -108,12 +110,12 @@ export class MenuService {
    * @returns Collection of renderable actions.
    */
   insufficientTerms(chatId: number) {
-    return Collection.from([
+    return Collection.of(
       Action.sendTgMessage({
         chatId,
-        text: "Недостаточно глаголов для тренировки.",
+        action: "renderInsufficientTerms",
       }),
-    ]);
+    );
   }
 
   /**
@@ -122,12 +124,12 @@ export class MenuService {
    * @returns Collection of renderable actions.
    */
   questionBuildFailed(chatId: number) {
-    return Collection.from([
+    return Collection.of(
       Action.sendTgMessage({
         chatId,
-        text: "Не удалось сформировать вопрос.",
+        action: "renderQuestionBuildFailed",
       }),
-    ]);
+    );
   }
 
   /**
@@ -136,12 +138,12 @@ export class MenuService {
    * @returns Collection of renderable actions.
    */
   unsupportedCommand(chatId: number) {
-    return Collection.from([
+    return Collection.of(
       Action.sendTgMessage({
         chatId,
-        text: "Пока поддерживается команда /start.",
+        action: "renderUnsupportedCommand",
       }),
-    ]);
+    );
   }
 
   /**
@@ -169,20 +171,22 @@ export class MenuService {
   protected async renderActionImpl(action: Action) {
     if (action.type === ActionType.SendTgMessage) {
       const payload = action.payload as SendMessagePayload;
+      const rendered = this.renderMenuPayload(payload as MenuRenderPayload);
       await this.telegramService.sendMessage(
         payload.chatId,
-        payload.text,
-        payload.keyboard,
+        rendered.text,
+        rendered.keyboard,
       );
       return;
     }
     if (action.type === ActionType.UpdateLastMessage) {
       const payload = action.payload as EditMessageTextPayload;
+      const rendered = this.renderMenuPayload(payload as MenuRenderPayload);
       await this.telegramService.editMessageText(
         payload.chatId,
         payload.messageId,
-        payload.text,
-        payload.keyboard,
+        rendered.text,
+        rendered.keyboard,
       );
       return;
     }
@@ -199,6 +203,41 @@ export class MenuService {
       const payload = action.payload as AnswerCallbackPayload;
       await this.telegramService.answerCallback(payload.callbackId);
     }
+  }
+
+  /**
+   * Builds message text and keyboard for menu render payloads.
+   * @param payload Menu render payload.
+   * @returns Rendered message data.
+   */
+  private renderMenuPayload(payload: MenuRenderPayload) {
+    if (payload.action === "renderStartMenu") {
+      return {
+        text: "Выберите режим тренировки:",
+        keyboard: this.modeKeyboard,
+      };
+    }
+    if (payload.action === "renderModeSelected") {
+      return {
+        text: `Режим: ${this.formatModeLabel(payload.mode)}. Выберите уровень:`,
+        keyboard: this.buildLevelKeyboard(payload.mode),
+      };
+    }
+    if (payload.action === "renderLevelSelected") {
+      return {
+        text: `Выбран ${this.formatModeLabel(payload.mode)} уровень ${payload.level.toUpperCase()}.`,
+      };
+    }
+    if (payload.action === "renderInsufficientTerms") {
+      return { text: "Недостаточно глаголов для тренировки." };
+    }
+    if (payload.action === "renderQuestionBuildFailed") {
+      return { text: "Не удалось сформировать вопрос." };
+    }
+    if (payload.action === "renderUnsupportedCommand") {
+      return { text: "Пока поддерживается команда /start." };
+    }
+    return { text: "Не удалось обработать действие." };
   }
 
   /**

@@ -3,7 +3,10 @@ import type { Term } from "../quiz-data";
 import { Session } from "../session";
 import { SessionsRepository } from "../sessions.repository";
 import { TelegramKeyboard, TelegramService } from "../telegram";
-import { TelegramKeyboardButton } from "../telegram-types";
+import {
+  TelegramInlineKeyboard,
+  TelegramKeyboardButton,
+} from "../telegram-types";
 import { TelegramUpdateMessage } from "../telegram-types";
 import { TrainingMode } from "../training";
 import { QuestionGenerator } from "../question-generator";
@@ -15,6 +18,7 @@ import {
   ActionType,
   AnswerCallbackPayload,
   EditMessageTextPayload,
+  GameRenderPayload,
   SendMessagePayload,
   SetKeyboardPayload,
 } from "../action";
@@ -66,21 +70,23 @@ export abstract class BaseGame<TInput extends GameInput> {
   protected async renderActionImpl(action: Action): Promise<void> {
     if (action.type === ActionType.SendTgMessage) {
       const payload = action.payload as SendMessagePayload;
+      const rendered = this.renderGamePayload(payload as GameRenderPayload);
       const response = await this.telegramService.sendMessage(
         payload.chatId,
-        payload.text,
-        payload.keyboard,
+        rendered.text,
+        rendered.keyboard,
       );
       await this.trackSessionMessage(payload, response.result?.message_id);
       return;
     }
     if (action.type === ActionType.UpdateLastMessage) {
       const payload = action.payload as EditMessageTextPayload;
+      const rendered = this.renderGamePayload(payload as GameRenderPayload);
       await this.telegramService.editMessageText(
         payload.chatId,
         payload.messageId,
-        payload.text,
-        payload.keyboard,
+        rendered.text,
+        rendered.keyboard,
       );
       return;
     }
@@ -98,6 +104,16 @@ export abstract class BaseGame<TInput extends GameInput> {
       await this.telegramService.answerCallback(payload.callbackId);
     }
   }
+
+  /**
+   * Builds message text and keyboard for game render payloads.
+   * @param payload Game render payload.
+   * @returns Rendered message data.
+   */
+  protected abstract renderGamePayload(payload: GameRenderPayload): {
+    text: string;
+    keyboard?: TelegramInlineKeyboard;
+  };
 
   /**
    * Overrides the action renderer (useful for tests).
@@ -187,20 +203,29 @@ export abstract class BaseGame<TInput extends GameInput> {
       session.mode === TrainingMode.RuGr
         ? current.options.map((id) => terms[id].greek).toArray
         : current.options.map((id) => terms[id].russian).toArray;
-    const text = this.buildPrompt(session, questionTerm);
-    const keyboard =
-      session.mode === TrainingMode.Write
-        ? undefined
-        : this.buildOptionsKeyboard(session.sessionId, optionTexts);
+    const payload = {
+      chatId: session.userId,
+      action: "renderQuestion" as const,
+      currentQuestionIndex: this.currentQuestionNumber(session),
+      totalQuestions: this.totalQuestions(session),
+      term:
+        session.mode === TrainingMode.GrRu
+          ? questionTerm.greek
+          : questionTerm.russian,
+      trackSession: session,
+    };
 
-    return Collection.from([
-      Action.sendTgMessage({
-        chatId: session.userId,
-        text,
-        keyboard,
-        trackSession: session,
-      }),
-    ]);
+    return Collection.of(
+      Action.sendTgMessage(
+        session.mode === TrainingMode.Write
+          ? payload
+          : {
+              ...payload,
+              options: optionTexts,
+              sessionId: session.sessionId,
+            },
+      ),
+    );
   }
 
   /**

@@ -204,9 +204,9 @@ export class Quiz {
     if (event.type === RouteEventType.CallbackUnknown) {
       const payload = event.payload as { callbackId: string };
       await this.renderMenuActions(
-        Collection.from([
+        Collection.of(
           Action.answerCallback({ callbackId: payload.callbackId }),
-        ]),
+        ),
       );
     }
   }

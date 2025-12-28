@@ -1,5 +1,5 @@
 import { Collection, Option, option, some } from "scats";
-import { Action } from "../action";
+import { Action, GameRenderPayload } from "../action";
 import { GoogleSpreadsheetsService } from "../sheets";
 import { MetricsService } from "../metrics";
 import { LeveledBaseGame } from "./leveled-base-game";
@@ -84,25 +84,25 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
       input.sessionId,
     );
     if (!sessionOption.isDefined) {
-      return Collection.from([
+      return Collection.of(
         Action.answerCallback({ callbackId: input.callbackId }),
         Action.sendTgMessage({
           chatId: input.chatId,
-          text: "Сессия не найдена. Начните заново через /start.",
+          action: "renderMissingSession",
         }),
-      ]);
+      );
     }
     const session = sessionOption.getOrElseThrow(
       () => new Error("Missing session"),
     );
     if (!session.current.isDefined) {
-      return Collection.from([
+      return Collection.of(
         Action.answerCallback({ callbackId: input.callbackId }),
         Action.sendTgMessage({
           chatId: input.chatId,
-          text: "Сессия не найдена. Начните заново через /start.",
+          action: "renderMissingSession",
         }),
-      ]);
+      );
     }
 
     // Ensure the callback refers to the active message.
@@ -110,13 +110,13 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
       () => new Error("Missing current question"),
     );
     if (current.messageId.exists((id) => id !== input.messageId)) {
-      return Collection.from([
+      return Collection.of(
         Action.answerCallback({ callbackId: input.callbackId }),
         Action.sendTgMessage({
           chatId: input.chatId,
-          text: "Этот вопрос уже не активен. Начните заново через /start.",
+          action: "renderInactiveQuestion",
         }),
-      ]);
+      );
     }
 
     // Load terms and compute result payload.
@@ -143,37 +143,35 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
       totalAsked: session.totalAsked + 1,
       correctCount: session.correctCount + (isCorrect ? 1 : 0),
     });
-
-    const resultText = [
-      `Вопрос ${this.currentQuestionNumber(updated)}/${this.totalQuestions(updated)}`,
+    const promptTerm =
       updated.mode === TrainingMode.RuGr || updated.mode === TrainingMode.Write
-        ? `Переведи: ${questionTerm.russian}`
-        : `Переведи: ${questionTerm.greek}`,
-      `Ваш ответ: ${selectedText}`,
-      `Правильный ответ: ${correctText}`,
-      isCorrect ? "✅ Верно" : "❌ Неверно",
-    ].join("\n");
+        ? questionTerm.russian
+        : questionTerm.greek;
 
     // Update message, emit metrics, and progress the session.
-    const resultActions = Collection.from([
+    const resultActions = Collection.of(
       Action.answerCallback({ callbackId: input.callbackId }),
       Action.updateLastMessage({
         chatId: input.chatId,
         messageId: input.messageId,
-        text: resultText,
+        action: "renderAnswerResult",
+        currentQuestionIndex: this.currentQuestionNumber(updated),
+        totalQuestions: this.totalQuestions(updated),
+        term: promptTerm,
+        answerText: selectedText,
+        correctText,
+        isCorrect,
       }),
-    ]);
-    await this.metricsService.safePutMetric("QuestionAnswered", 1, {
+    );
+    await this.metricsService.counter("QuestionAnswered").inc({
       Mode: updated.mode,
       Level: updated.level.toUpperCase(),
       Result: isCorrect ? "correct" : "wrong",
     });
-    await this.metricsService.safePutMetric("QuestionAnsweredTotal", 1, {});
-    await this.metricsService.safePutMetric(
-      isCorrect ? "QuestionAnsweredCorrect" : "QuestionAnsweredWrong",
-      1,
-      {},
-    );
+    await this.metricsService.counter("QuestionAnsweredTotal").inc();
+    await this.metricsService
+      .counter(isCorrect ? "QuestionAnsweredCorrect" : "QuestionAnsweredWrong")
+      .inc();
 
     // Build next question or finish the session.
     const nextPack = this.questionGenerator.createQuestion(
@@ -182,19 +180,21 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
     );
     if (!nextPack) {
       await this.sessionsRepository.putSession(updated);
-      await this.metricsService.safePutMetric("SessionEnd", 1, {
+      await this.metricsService.counter("SessionEnd").inc({
         Mode: updated.mode,
         Level: updated.level.toUpperCase(),
       });
-      await this.metricsService.safePutMetric("SessionEndTotal", 1, {});
+      await this.metricsService.counter("SessionEndTotal").inc();
       return resultActions
         .concat(
-          Collection.from([
+          Collection.of(
             Action.sendTgMessage({
               chatId: input.chatId,
-              text: `Сессия завершена. Правильных: ${updated.correctCount} из ${updated.totalAsked}.`,
+              action: "renderSessionEnd",
+              correctCount: updated.correctCount,
+              totalAsked: updated.totalAsked,
             }),
-          ]),
+          ),
         )
         .concat(this.menuService.start(input.chatId));
     }
@@ -205,5 +205,58 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
     });
     await this.sessionsRepository.putSession(nextSession);
     return resultActions.concat(this.sendQuestion(nextSession, terms));
+  }
+
+  /**
+   * Builds render data for choice-game actions.
+   * @param payload Game render payload.
+   * @returns Rendered message data.
+   */
+  protected renderGamePayload(payload: GameRenderPayload) {
+    if (payload.action === "renderQuestion") {
+      if (!payload.sessionId) {
+        return {
+          text: "Не удалось обработать действие.",
+        };
+      }
+      const keyboard = this.buildOptionsKeyboard(
+        payload.sessionId,
+        payload.options ?? [],
+      );
+      return {
+        text: `Вопрос ${payload.currentQuestionIndex}/${payload.totalQuestions}\nПереведи: ${payload.term}`,
+        keyboard,
+      };
+    }
+    if (payload.action === "renderAnswerResult") {
+      const resultLine = payload.isCorrect ? "✅ Верно" : "❌ Неверно";
+      return {
+        text: [
+          `Вопрос ${payload.currentQuestionIndex}/${payload.totalQuestions}`,
+          `Переведи: ${payload.term}`,
+          `Ваш ответ: ${payload.answerText}`,
+          `Правильный ответ: ${payload.correctText}`,
+          resultLine,
+        ].join("\n"),
+      };
+    }
+    if (payload.action === "renderSessionEnd") {
+      return {
+        text: `Сессия завершена. Правильных: ${payload.correctCount} из ${payload.totalAsked}.`,
+      };
+    }
+    if (payload.action === "renderMissingSession") {
+      return {
+        text: "Сессия не найдена. Начните заново через /start.",
+      };
+    }
+    if (payload.action === "renderInactiveQuestion") {
+      return {
+        text: "Этот вопрос уже не активен. Начните заново через /start.",
+      };
+    }
+    return {
+      text: "Не удалось обработать действие.",
+    };
   }
 }

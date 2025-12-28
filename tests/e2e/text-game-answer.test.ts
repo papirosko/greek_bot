@@ -1,5 +1,6 @@
 import { Collection } from "scats";
 import { ActionType } from "../../src/action";
+import { TrainingMode } from "../../src/training";
 import { Test } from "../test-context";
 
 describe("Text game answers", () => {
@@ -27,14 +28,19 @@ describe("Text game answers", () => {
           payload: {
             chatId,
             messageId: 50,
-            text: "Выбран Написание (RU → GR) уровень A1.",
+            action: "renderLevelSelected",
+            mode: TrainingMode.Write,
+            level: "a1",
           },
         },
         {
           type: ActionType.SendTgMessage,
           payload: {
             chatId,
-            text: "Вопрос 1/4\nПереведи: alpha",
+            action: "renderQuestion",
+            currentQuestionIndex: 1,
+            totalQuestions: 4,
+            term: "alpha",
           },
         },
       ),
@@ -53,14 +59,23 @@ describe("Text game answers", () => {
           payload: {
             chatId,
             messageId: 1,
-            text: expect.stringContaining("✅ Верно"),
+            action: "renderAnswerResult",
+            currentQuestionIndex: 2,
+            totalQuestions: 4,
+            term: "alpha",
+            answerText: "αλφα",
+            correctText: "αλφα",
+            isCorrect: true,
           },
         },
         {
           type: ActionType.SendTgMessage,
           payload: {
             chatId,
-            text: "Вопрос 2/4\nПереведи: beta",
+            action: "renderQuestion",
+            currentQuestionIndex: 2,
+            totalQuestions: 4,
+            term: "beta",
           },
         },
       ),

@@ -20,29 +20,7 @@ describe("Quiz start menu", () => {
         type: ActionType.SendTgMessage,
         payload: {
           chatId: 777,
-          text: "Выберите режим тренировки:",
-          keyboard: {
-            inline_keyboard: [
-              [
-                {
-                  text: "Перевод (GR → RU)",
-                  callback_data: `mode:${TrainingMode.GrRu}`,
-                },
-              ],
-              [
-                {
-                  text: "Перевод (RU → GR)",
-                  callback_data: `mode:${TrainingMode.RuGr}`,
-                },
-              ],
-              [
-                {
-                  text: "Написание (RU → GR)",
-                  callback_data: `mode:${TrainingMode.Write}`,
-                },
-              ],
-            ],
-          },
+          action: "renderStartMenu",
         },
       }),
     );
@@ -66,19 +44,8 @@ describe("Quiz start menu", () => {
           payload: {
             chatId: 222,
             messageId: 333,
-            text: "Режим: Перевод (RU → GR). Выберите уровень:",
-            keyboard: {
-              inline_keyboard: [
-                [
-                  { text: "A1", callback_data: "level:a1|mode:ru-gr" },
-                  { text: "A2", callback_data: "level:a2|mode:ru-gr" },
-                ],
-                [
-                  { text: "B1", callback_data: "level:b1|mode:ru-gr" },
-                  { text: "B2", callback_data: "level:b2|mode:ru-gr" },
-                ],
-              ],
-            },
+            action: "renderModeSelected",
+            mode: TrainingMode.RuGr,
           },
         },
       ),

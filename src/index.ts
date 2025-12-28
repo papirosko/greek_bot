@@ -62,8 +62,8 @@ export const handler = async (
   } catch (error) {
     // Report handler errors via metrics without failing the webhook.
     console.error("handler_error", error);
-    await metricsService.safePutMetric("Error", 1, { Stage: "handler" });
-    await metricsService.safePutMetric("ErrorTotal", 1, {});
+    await metricsService.counter("Error").inc({ Stage: "handler" });
+    await metricsService.counter("ErrorTotal").inc();
     return { statusCode: 200, body: "ok" };
   }
 };

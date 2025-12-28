@@ -1,3 +1,4 @@
+import { TrainingMode } from "./training";
 import { TelegramInlineKeyboard } from "./telegram-types";
 import { Session } from "./session";
 
@@ -14,21 +15,15 @@ export enum ActionType {
 /**
  * Payload for sending a message.
  */
-export type SendMessagePayload = {
-  chatId: number;
-  text: string;
-  keyboard?: TelegramInlineKeyboard;
+export type SendMessagePayload = RenderPayload & {
   trackSession?: Session;
 };
 
 /**
  * Payload for editing a message text.
  */
-export type EditMessageTextPayload = {
-  chatId: number;
+export type EditMessageTextPayload = RenderPayload & {
   messageId: number;
-  text: string;
-  keyboard?: TelegramInlineKeyboard;
 };
 
 /**
@@ -55,6 +50,107 @@ export type ActionPayload =
   | EditMessageTextPayload
   | SetKeyboardPayload
   | AnswerCallbackPayload;
+
+export type RenderQuestionPayload = {
+  action: "renderQuestion";
+  chatId: number;
+  currentQuestionIndex: number;
+  totalQuestions: number;
+  term: string;
+  options?: string[];
+  sessionId?: string;
+};
+
+export type RenderAnswerResultPayload = {
+  action: "renderAnswerResult";
+  chatId: number;
+  currentQuestionIndex: number;
+  totalQuestions: number;
+  term: string;
+  answerText: string;
+  correctText: string;
+  isCorrect: boolean;
+};
+
+export type RenderSessionEndPayload = {
+  action: "renderSessionEnd";
+  chatId: number;
+  correctCount: number;
+  totalAsked: number;
+};
+
+export type RenderMissingSessionPayload = {
+  action: "renderMissingSession";
+  chatId: number;
+};
+
+export type RenderInactiveQuestionPayload = {
+  action: "renderInactiveQuestion";
+  chatId: number;
+};
+
+export type RenderNoActiveSessionPayload = {
+  action: "renderNoActiveSession";
+  chatId: number;
+};
+
+export type RenderInvalidAnswerPayload = {
+  action: "renderInvalidAnswer";
+  chatId: number;
+  reason: "empty";
+};
+
+export type RenderStartMenuPayload = {
+  action: "renderStartMenu";
+  chatId: number;
+};
+
+export type RenderModeSelectedPayload = {
+  action: "renderModeSelected";
+  chatId: number;
+  mode: TrainingMode;
+};
+
+export type RenderLevelSelectedPayload = {
+  action: "renderLevelSelected";
+  chatId: number;
+  mode: TrainingMode;
+  level: string;
+};
+
+export type RenderInsufficientTermsPayload = {
+  action: "renderInsufficientTerms";
+  chatId: number;
+};
+
+export type RenderQuestionBuildFailedPayload = {
+  action: "renderQuestionBuildFailed";
+  chatId: number;
+};
+
+export type RenderUnsupportedCommandPayload = {
+  action: "renderUnsupportedCommand";
+  chatId: number;
+};
+
+export type GameRenderPayload =
+  | RenderQuestionPayload
+  | RenderAnswerResultPayload
+  | RenderSessionEndPayload
+  | RenderMissingSessionPayload
+  | RenderInactiveQuestionPayload
+  | RenderNoActiveSessionPayload
+  | RenderInvalidAnswerPayload;
+
+export type MenuRenderPayload =
+  | RenderStartMenuPayload
+  | RenderModeSelectedPayload
+  | RenderLevelSelectedPayload
+  | RenderInsufficientTermsPayload
+  | RenderQuestionBuildFailedPayload
+  | RenderUnsupportedCommandPayload;
+
+export type RenderPayload = GameRenderPayload | MenuRenderPayload;
 
 /**
  * Renderable action descriptor.

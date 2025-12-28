@@ -66,4 +66,51 @@ export class MetricsService {
       console.warn("metric_error", metricName, error);
     }
   }
+
+  /**
+   * Returns a counter helper for a metric.
+   * @param metricName Metric name.
+   * @returns Counter helper.
+   */
+  counter(metricName: string) {
+    return new MetricCounter(this, metricName);
+  }
+}
+
+/**
+ * Counter helper for metrics.
+ */
+class MetricCounter {
+  /**
+   * @param metricsService Metrics service.
+   * @param metricName Metric name.
+   */
+  constructor(
+    private readonly metricsService: MetricsService,
+    private readonly metricName: string,
+  ) {}
+
+  /**
+   * Increments the counter.
+   * @param valueOrDimensions Optional value or dimensions.
+   * @param dimensions Optional dimensions when value is provided.
+   * @returns Promise resolved after sending the metric.
+   */
+  inc(
+    valueOrDimensions?: number | MetricDimensions,
+    dimensions: MetricDimensions = {},
+  ) {
+    if (typeof valueOrDimensions === "number") {
+      return this.metricsService.safePutMetric(
+        this.metricName,
+        valueOrDimensions,
+        dimensions,
+      );
+    }
+    return this.metricsService.safePutMetric(
+      this.metricName,
+      1,
+      valueOrDimensions ?? {},
+    );
+  }
 }
