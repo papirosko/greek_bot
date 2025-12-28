@@ -60,6 +60,7 @@ export class QuizDataBase {
         [TrainingMode.GrRu, terms],
         [TrainingMode.RuGr, terms],
         [TrainingMode.Write, terms],
+        [TrainingMode.TextTopic, terms],
       ),
     );
   }

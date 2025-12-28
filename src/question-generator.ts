@@ -1,5 +1,4 @@
 import { Collection, HashSet, none } from "scats";
-import type { Term } from "./quiz-data";
 import { SessionQuestion } from "./session-question";
 
 /**
@@ -12,7 +11,7 @@ export class QuestionGenerator {
    * @param remainingIds Remaining term ids.
    * @returns Question pack or null when done.
    */
-  createQuestion(terms: Collection<Term>, remainingIds: HashSet<number>) {
+  createQuestion<T>(terms: Collection<T>, remainingIds: HashSet<number>) {
     if (remainingIds.isEmpty) {
       return null;
     }

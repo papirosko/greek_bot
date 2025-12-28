@@ -31,6 +31,12 @@ export class MenuService {
         callback_data: `mode:${TrainingMode.Write}`,
       },
     ],
+    [
+      {
+        text: "Тема по тексту (GR → RU)",
+        callback_data: `mode:${TrainingMode.TextTopic}`,
+      },
+    ],
   ]);
 
   /**
@@ -251,7 +257,10 @@ export class MenuService {
       };
     }
     if (payload.action === "renderModeSelected") {
-      if (payload.mode === TrainingMode.Write) {
+      if (
+        payload.mode === TrainingMode.Write ||
+        payload.mode === TrainingMode.TextTopic
+      ) {
         return {
           text: `Режим: ${this.formatModeLabel(payload.mode)}. Выберите уровень:`,
           keyboard: this.buildLevelKeyboard(payload.mode),
@@ -353,6 +362,9 @@ export class MenuService {
     }
     if (mode === TrainingMode.Write) {
       return "Написание (RU → GR)";
+    }
+    if (mode === TrainingMode.TextTopic) {
+      return "Тема по тексту (GR → RU)";
     }
     return "Перевод (GR → RU)";
   }

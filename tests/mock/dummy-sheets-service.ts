@@ -1,8 +1,10 @@
 import { Collection, HashMap } from "scats";
 import { GoogleSpreadsheetsService } from "../../src/sheets";
 import { QuizDataBase, Term } from "../../src/quiz-data";
+import { TextTopic, TextTopicService } from "../../src/text-topic";
 
 export type TermRow = [string, string];
+export type TextTopicRow = [string, string];
 
 /**
  * Test double for GoogleSpreadsheetsService with predefined data.
@@ -10,8 +12,12 @@ export type TermRow = [string, string];
 export class DummySheetsService extends GoogleSpreadsheetsService {
   /**
    * @param levels Map of level -> term rows.
+   * @param textLevels Map of level -> text topic rows.
    */
-  constructor(private readonly levels: HashMap<string, Collection<TermRow>>) {
+  constructor(
+    private readonly levels: HashMap<string, Collection<TermRow>>,
+    private readonly textLevels: HashMap<string, Collection<TextTopicRow>>,
+  ) {
     super("", 0);
   }
 
@@ -25,5 +31,18 @@ export class DummySheetsService extends GoogleSpreadsheetsService {
     const rows = this.levels.getOrElseValue(level, Collection.empty);
     const terms = rows.map((row) => new Term(row[1], row[0]));
     return QuizDataBase.forAllModes(terms);
+  }
+
+  /**
+   * Returns text topics built from in-memory rows.
+   * @param _spreadsheetId Ignored spreadsheet id.
+   * @param level Training level key.
+   * @returns Collection of text topics.
+   */
+  async loadTextTopics(_spreadsheetId: string, level: string) {
+    const key = TextTopicService.sheetName(level);
+    const rows = this.textLevels.getOrElseValue(key, Collection.empty);
+    const topics = rows.map((row) => new TextTopic(row[0], row[1]));
+    return new Collection(topics.toArray);
   }
 }

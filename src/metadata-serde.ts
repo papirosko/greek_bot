@@ -76,7 +76,7 @@ export class MetadataSerDe {
   static parseLevel(data: string): Option<LevelMetadata> {
     return option(
       data.match(
-        /^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru|write)(?:\|category:(verbs|nouns|adjectives|adverbs))?$/,
+        /^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru|write|text-topic)(?:\|category:(verbs|nouns|adjectives|adverbs))?$/,
       ),
     ).map((match) => ({
       level: match[1],

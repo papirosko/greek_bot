@@ -51,6 +51,11 @@ describe("MetadataSerDe", () => {
     ).toEqual(
       some({ level: "a1", mode: TrainingMode.RuGr, category: WordCategory.Verbs }),
     );
+    expect(
+      MetadataSerDe.parseLevel("level:b1|mode:text-topic"),
+    ).toEqual(
+      some({ level: "b1", mode: TrainingMode.TextTopic, category: undefined }),
+    );
     expect(MetadataSerDe.parseLevel("mode:ru-gr")).toEqual(none);
   });
 

@@ -13,6 +13,8 @@ import { TextGame } from "./text-game";
 import { TextGameInput } from "./text-game-input";
 import { ActionsRenderer } from "../action";
 import { BaseGame } from "./base-game";
+import { TextTopicGame } from "./text-topic-game";
+import { TextTopicGameInput } from "./text-topic-game-input";
 
 type ChoiceGameInvocation = {
   kind: "choice";
@@ -26,10 +28,19 @@ type TextGameInvocation = {
   input: TextGameInput;
 };
 
+type TextTopicGameInvocation = {
+  kind: "text-topic";
+  game: TextTopicGame;
+  input: TextTopicGameInput;
+};
+
 /**
  * Union describing a resolved game instance and input.
  */
-export type GameInvocation = ChoiceGameInvocation | TextGameInvocation;
+export type GameInvocation =
+  | ChoiceGameInvocation
+  | TextGameInvocation
+  | TextTopicGameInvocation;
 
 /**
  * Factory that creates games and resolves updates to inputs.
@@ -63,6 +74,9 @@ export class GameFactory {
    * @returns Game instance handling that mode.
    */
   forMode(mode: TrainingMode) {
+    if (mode === TrainingMode.TextTopic) {
+      return this.createTextTopicGame();
+    }
     return mode === TrainingMode.Write
       ? this.createTextGame()
       : this.createChoiceGame();
@@ -74,6 +88,18 @@ export class GameFactory {
    * @returns Option with game and input.
    */
   forUpdate(update: TelegramUpdateMessage): Option<GameInvocation> {
+    const textTopicGame = this.createTextTopicGame();
+    const textTopicInput = textTopicGame.buildInput(update);
+    if (textTopicInput.isDefined) {
+      return some<GameInvocation>({
+        kind: "text-topic",
+        game: textTopicGame,
+        input: textTopicInput.getOrElseThrow(
+          () => new Error("Missing text-topic input"),
+        ),
+      });
+    }
+
     const choiceGame = this.createChoiceGame();
     const choiceInput = choiceGame.buildInput(update);
     if (choiceInput.isDefined) {
@@ -123,6 +149,24 @@ export class GameFactory {
    */
   private createTextGame() {
     const game = new TextGame(
+      this.telegramService,
+      this.sessionsRepository,
+      this.questionGenerator,
+      this.menuService,
+      this.sheetsService,
+      this.metricsService,
+      this.spreadsheetId,
+    );
+    this.applyRenderer(game);
+    return game;
+  }
+
+  /**
+   * Builds a text-topic game instance.
+   * @returns TextTopicGame instance.
+   */
+  private createTextTopicGame() {
+    const game = new TextTopicGame(
       this.telegramService,
       this.sessionsRepository,
       this.questionGenerator,

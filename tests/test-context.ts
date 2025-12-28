@@ -4,12 +4,17 @@ import { Quiz } from "../src/quiz";
 import { TelegramUpdateMessage } from "../src/telegram-types";
 import { MenuService } from "../src/menu-service";
 import { GameFactory } from "../src/games/game-factory";
-import { TermRow, DummySheetsService } from "./mock/dummy-sheets-service";
+import {
+  TermRow,
+  TextTopicRow,
+  DummySheetsService,
+} from "./mock/dummy-sheets-service";
 import { NullTelegramService } from "./mock/null-telegram-service";
 import { NullMetricsService } from "./mock/null-metrics-service";
 import { InMemorySessionsRepository } from "./mock/in-memory-sessions-repository";
 import { DeterministicQuestionGenerator } from "./mock/deterministic-question-generator";
 import { WordCategory, WordCategoryService } from "../src/word-category";
+import { TextTopicService } from "../src/text-topic";
 
 /**
  * Shared test context for quiz/game suites.
@@ -44,6 +49,24 @@ export class Test {
       ["εδώ", "here"],
       ["εκεί", "there"],
     ];
+    const textA1Rows: TextTopicRow[] = [
+      [
+        "Ο Κώστας πηγαίνει στο σούπερ μάρκετ και αγοράζει ψωμί, τυρί και γάλα. Ρωτάει την τιμή και πληρώνει στο ταμείο.",
+        "покупки в магазине",
+      ],
+      [
+        "Η Μαρία τηλεφωνεί στη φίλη της και κανονίζουν να συναντηθούν το βράδυ. Θα μαγειρέψουν μαζί και θα πιουν κρασί.",
+        "ужин с другом",
+      ],
+      [
+        "Ο Πέτρος περιμένει το λεωφορείο στη στάση και κοιτάζει το ρολόι. Το λεωφορείο αργεί, αλλά τελικά έρχεται.",
+        "ожидание автобуса",
+      ],
+      [
+        "Η Άννα έχει ραντεβού με τον γιατρό και περιγράφει τα συμπτώματα. Ο γιατρός γράφει συνταγή και της δίνει συμβουλές.",
+        "прием у врача",
+      ],
+    ];
     this.sheetsService = new DummySheetsService(
       HashMap.of(
         [WordCategoryService.sheetName("a1"), Collection.from(a1Rows)],
@@ -56,6 +79,7 @@ export class Test {
           Collection.from(adverbsA1Rows),
         ],
       ),
+      HashMap.of([TextTopicService.sheetName("a1"), Collection.from(textA1Rows)]),
     );
     const collectMenuRenderer = async (action: Action) => {
       this.actions.append(action);
