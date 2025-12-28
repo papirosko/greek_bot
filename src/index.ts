@@ -44,16 +44,7 @@ const gameFactory = new GameFactory(
   metricsService,
   config.sheetsId,
 );
-const quiz = new Quiz(
-  telegramService,
-  sheetsService,
-  sessionsRepository,
-  questionGenerator,
-  metricsService,
-  menuService,
-  gameFactory,
-  config.sheetsId,
-);
+const quiz = new Quiz(sessionsRepository, menuService, gameFactory);
 
 /**
  * AWS Lambda entrypoint.

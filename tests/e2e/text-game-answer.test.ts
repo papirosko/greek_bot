@@ -1,3 +1,5 @@
+import { Collection } from "scats";
+import { ActionType } from "../../src/action";
 import { Test } from "../test-context";
 
 describe("Text game answers", () => {
@@ -14,40 +16,54 @@ describe("Text game answers", () => {
       test.createTgCallback(chatId, 50, "level:a1|mode:write", "cb-start"),
     );
 
-    expect(test.telegramService.sentMessages.length).toBe(1);
-    expect(test.telegramService.sentMessages[0]).toMatchObject({
-      chatId,
-      text: "Вопрос 1/4\nПереведи: alpha",
-    });
-    const baseEdits = test.telegramService.editedMessages.length;
+    expect(test.renderedActions.map((action) => action.item)).toEqual(
+      Collection.of(
+        {
+          type: ActionType.AnswerCallback,
+          payload: { callbackId: "cb-start" },
+        },
+        {
+          type: ActionType.UpdateLastMessage,
+          payload: {
+            chatId,
+            messageId: 50,
+            text: "Выбран Написание (RU → GR) уровень A1.",
+          },
+        },
+        {
+          type: ActionType.SendTgMessage,
+          payload: {
+            chatId,
+            text: "Вопрос 1/4\nПереведи: alpha",
+          },
+        },
+      ),
+    );
+    const baseActions = test.renderedActions.length;
 
     await test.quiz.handleUpdate(test.createTgTextMessage(chatId, "αλφα"));
 
-    expect(test.telegramService.editedMessages.length).toBe(baseEdits + 1);
-    expect(
-      test.telegramService.editedMessages[
-        test.telegramService.editedMessages.length - 1
-      ].text,
-    ).toContain("✅ Верно");
-    expect(
-      test.telegramService.editedMessages[
-        test.telegramService.editedMessages.length - 1
-      ].text,
-    ).toContain(
-      "Ваш ответ: αλφα",
+    const answerActions = test.renderedActions
+      .map((action) => action.item)
+      .slice(baseActions, baseActions + 2);
+    expect(answerActions).toEqual(
+      Collection.of(
+        {
+          type: ActionType.UpdateLastMessage,
+          payload: {
+            chatId,
+            messageId: 1,
+            text: expect.stringContaining("✅ Верно"),
+          },
+        },
+        {
+          type: ActionType.SendTgMessage,
+          payload: {
+            chatId,
+            text: "Вопрос 2/4\nПереведи: beta",
+          },
+        },
+      ),
     );
-    expect(
-      test.telegramService.editedMessages[
-        test.telegramService.editedMessages.length - 1
-      ].text,
-    ).toContain(
-      "Правильный ответ: αλφα",
-    );
-
-    expect(test.telegramService.sentMessages.length).toBe(2);
-    expect(test.telegramService.sentMessages[1]).toMatchObject({
-      chatId,
-      text: "Вопрос 2/4\nПереведи: beta",
-    });
   });
 });

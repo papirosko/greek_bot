@@ -1,7 +1,8 @@
-import { Option, option, some } from "scats";
+import { Collection, Option, option, some } from "scats";
+import { Action } from "../action";
 import { GoogleSpreadsheetsService } from "../sheets";
 import { MetricsService } from "../metrics";
-import { BaseGame } from "./base-game";
+import { LeveledBaseGame } from "./leveled-base-game";
 import { ChoiceGameInput } from "./choice-game-input";
 import { TelegramUpdateMessage } from "../telegram-types";
 import { TrainingMode } from "../training";
@@ -13,7 +14,7 @@ import { MenuService } from "../menu-service";
 /**
  * Multiple-choice game implementation.
  */
-export class ChoiceGame extends BaseGame<ChoiceGameInput> {
+export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
   /**
    * @param telegramService Telegram API client.
    * @param sessionsRepository Session persistence repository.
@@ -28,8 +29,8 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
     sessionsRepository: SessionsRepository,
     questionGenerator: QuestionGenerator,
     menuService: MenuService,
-    private readonly sheetsService: GoogleSpreadsheetsService,
-    private readonly metricsService: MetricsService,
+    sheetsService: GoogleSpreadsheetsService,
+    metricsService: MetricsService,
     spreadsheetId: string,
   ) {
     super(
@@ -37,6 +38,8 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       sessionsRepository,
       questionGenerator,
       menuService,
+      sheetsService,
+      metricsService,
       spreadsheetId,
     );
   }
@@ -73,35 +76,33 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
   /**
    * Handles a single answer selection.
    * @param input Parsed choice game input.
-   * @returns Promise resolved when processing is complete.
+   * @returns Collection of renderable actions.
    */
-  async invoke(input: ChoiceGameInput): Promise<void> {
+  async invoke(input: ChoiceGameInput): Promise<Collection<Action>> {
     // Validate session existence and current question.
     const sessionOption = await this.sessionsRepository.getSession(
       input.sessionId,
     );
     if (!sessionOption.isDefined) {
-      await Promise.all([
-        this.telegramService.answerCallback(input.callbackId),
-        this.telegramService.sendMessage(
-          input.chatId,
-          "Сессия не найдена. Начните заново через /start.",
-        ),
+      return Collection.from([
+        Action.answerCallback({ callbackId: input.callbackId }),
+        Action.sendTgMessage({
+          chatId: input.chatId,
+          text: "Сессия не найдена. Начните заново через /start.",
+        }),
       ]);
-      return;
     }
     const session = sessionOption.getOrElseThrow(
       () => new Error("Missing session"),
     );
     if (!session.current.isDefined) {
-      await Promise.all([
-        this.telegramService.answerCallback(input.callbackId),
-        this.telegramService.sendMessage(
-          input.chatId,
-          "Сессия не найдена. Начните заново через /start.",
-        ),
+      return Collection.from([
+        Action.answerCallback({ callbackId: input.callbackId }),
+        Action.sendTgMessage({
+          chatId: input.chatId,
+          text: "Сессия не найдена. Начните заново через /start.",
+        }),
       ]);
-      return;
     }
 
     // Ensure the callback refers to the active message.
@@ -109,14 +110,13 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       () => new Error("Missing current question"),
     );
     if (current.messageId.exists((id) => id !== input.messageId)) {
-      await Promise.all([
-        this.telegramService.answerCallback(input.callbackId),
-        this.telegramService.sendMessage(
-          input.chatId,
-          "Этот вопрос уже не активен. Начните заново через /start.",
-        ),
+      return Collection.from([
+        Action.answerCallback({ callbackId: input.callbackId }),
+        Action.sendTgMessage({
+          chatId: input.chatId,
+          text: "Этот вопрос уже не активен. Начните заново через /start.",
+        }),
       ]);
-      return;
     }
 
     // Load terms and compute result payload.
@@ -155,13 +155,13 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
     ].join("\n");
 
     // Update message, emit metrics, and progress the session.
-    await Promise.all([
-      this.telegramService.answerCallback(input.callbackId),
-      this.telegramService.editMessageText(
-        input.chatId,
-        input.messageId,
-        resultText,
-      ),
+    const resultActions = Collection.from([
+      Action.answerCallback({ callbackId: input.callbackId }),
+      Action.updateLastMessage({
+        chatId: input.chatId,
+        messageId: input.messageId,
+        text: resultText,
+      }),
     ]);
     await this.metricsService.safePutMetric("QuestionAnswered", 1, {
       Mode: updated.mode,
@@ -187,12 +187,16 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
         Level: updated.level.toUpperCase(),
       });
       await this.metricsService.safePutMetric("SessionEndTotal", 1, {});
-      await this.telegramService.sendMessage(
-        input.chatId,
-        `Сессия завершена. Правильных: ${updated.correctCount} из ${updated.totalAsked}.`,
-      );
-      await this.menuService.sendStart(input.chatId);
-      return;
+      return resultActions
+        .concat(
+          Collection.from([
+            Action.sendTgMessage({
+              chatId: input.chatId,
+              text: `Сессия завершена. Правильных: ${updated.correctCount} из ${updated.totalAsked}.`,
+            }),
+          ]),
+        )
+        .concat(this.menuService.start(input.chatId));
     }
 
     const nextSession = updated.copy({
@@ -200,6 +204,6 @@ export class ChoiceGame extends BaseGame<ChoiceGameInput> {
       remainingIds: nextPack.remaining.toCollection,
     });
     await this.sessionsRepository.putSession(nextSession);
-    await this.sendQuestion(nextSession, terms);
+    return resultActions.concat(this.sendQuestion(nextSession, terms));
   }
 }

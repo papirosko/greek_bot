@@ -73,6 +73,25 @@ export class TelegramService {
   }
 
   /**
+   * Updates the inline keyboard of a message.
+   * @param chatId Telegram chat id.
+   * @param messageId Telegram message id.
+   * @param keyboard Updated inline keyboard.
+   * @returns Telegram API response.
+   */
+  editMessageReplyMarkup(
+    chatId: number,
+    messageId: number,
+    keyboard: TelegramInlineKeyboard,
+  ) {
+    return this.request("editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: keyboard,
+    });
+  }
+
+  /**
    * Подтверждает callback-кнопку.
    * @param callbackQueryId Callback query id.
    * @returns Telegram API response.

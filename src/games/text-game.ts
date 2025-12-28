@@ -1,7 +1,8 @@
-import { Option, some } from "scats";
+import { Collection, Option, some } from "scats";
+import { Action } from "../action";
 import { GoogleSpreadsheetsService } from "../sheets";
 import { MetricsService } from "../metrics";
-import { BaseGame } from "./base-game";
+import { LeveledBaseGame } from "./leveled-base-game";
 import { TextGameInput } from "./text-game-input";
 import { TelegramUpdateMessage } from "../telegram-types";
 import { TrainingMode } from "../training";
@@ -13,7 +14,7 @@ import { MenuService } from "../menu-service";
 /**
  * Text-input game implementation.
  */
-export class TextGame extends BaseGame<TextGameInput> {
+export class TextGame extends LeveledBaseGame<TextGameInput> {
   /**
    * @param telegramService Telegram API client.
    * @param sessionsRepository Session persistence repository.
@@ -28,8 +29,8 @@ export class TextGame extends BaseGame<TextGameInput> {
     sessionsRepository: SessionsRepository,
     questionGenerator: QuestionGenerator,
     menuService: MenuService,
-    private readonly sheetsService: GoogleSpreadsheetsService,
-    private readonly metricsService: MetricsService,
+    sheetsService: GoogleSpreadsheetsService,
+    metricsService: MetricsService,
     spreadsheetId: string,
   ) {
     super(
@@ -37,6 +38,8 @@ export class TextGame extends BaseGame<TextGameInput> {
       sessionsRepository,
       questionGenerator,
       menuService,
+      sheetsService,
+      metricsService,
       spreadsheetId,
     );
   }
@@ -57,23 +60,21 @@ export class TextGame extends BaseGame<TextGameInput> {
   /**
    * Handles a single text answer input.
    * @param input Parsed text game input.
-   * @returns Promise resolved when processing is complete.
+   * @returns Collection of renderable actions.
    */
-  async invoke(input: TextGameInput): Promise<void> {
+  async invoke(input: TextGameInput): Promise<Collection<Action>> {
     // Validate session existence and required mode.
     const sessionOption = await this.sessionsRepository.getSessionByUserId(
       input.chatId,
     );
     if (!sessionOption.isDefined) {
-      await this.reportNoSession(input.chatId);
-      return;
+      return await this.reportNoSession(input.chatId);
     }
     const session = sessionOption.getOrElseThrow(
       () => new Error("Missing session"),
     );
     if (!session.current.isDefined || session.mode !== TrainingMode.Write) {
-      await this.reportNoSession(input.chatId);
-      return;
+      return await this.reportNoSession(input.chatId);
     }
 
     // Normalize user input and validate it is not empty.
@@ -88,11 +89,12 @@ export class TextGame extends BaseGame<TextGameInput> {
         Level: session.level.toUpperCase(),
       });
       await this.metricsService.safePutMetric("InvalidAnswerTotal", 1, {});
-      await this.telegramService.sendMessage(
-        input.chatId,
-        "Ответ пустой. Напишите слово на греческом.",
-      );
-      return;
+      return Collection.from([
+        Action.sendTgMessage({
+          chatId: input.chatId,
+          text: "Ответ пустой. Напишите слово на греческом.",
+        }),
+      ]);
     }
 
     // Load terms and compute result payload.
@@ -122,15 +124,18 @@ export class TextGame extends BaseGame<TextGameInput> {
     const resultMessageId = updated.current.flatMap(
       (question) => question.messageId,
     ).orUndefined;
-    if (resultMessageId) {
-      await this.telegramService.editMessageText(
-        input.chatId,
-        resultMessageId,
-        resultText,
-      );
-    } else {
-      await this.telegramService.sendMessage(input.chatId, resultText);
-    }
+    const resultActions = Collection.from([
+      resultMessageId
+        ? Action.updateLastMessage({
+            chatId: input.chatId,
+            messageId: resultMessageId,
+            text: resultText,
+          })
+        : Action.sendTgMessage({
+            chatId: input.chatId,
+            text: resultText,
+          }),
+    ]);
     await this.metricsService.safePutMetric("QuestionAnswered", 1, {
       Mode: updated.mode,
       Level: updated.level.toUpperCase(),
@@ -155,12 +160,16 @@ export class TextGame extends BaseGame<TextGameInput> {
         Level: updated.level.toUpperCase(),
       });
       await this.metricsService.safePutMetric("SessionEndTotal", 1, {});
-      await this.telegramService.sendMessage(
-        input.chatId,
-        `Сессия завершена. Правильных: ${updated.correctCount} из ${updated.totalAsked}.`,
-      );
-      await this.menuService.sendStart(input.chatId);
-      return;
+      return resultActions
+        .concat(
+          Collection.from([
+            Action.sendTgMessage({
+              chatId: input.chatId,
+              text: `Сессия завершена. Правильных: ${updated.correctCount} из ${updated.totalAsked}.`,
+            }),
+          ]),
+        )
+        .concat(this.menuService.start(input.chatId));
     }
 
     const nextSession = updated.copy({
@@ -168,7 +177,7 @@ export class TextGame extends BaseGame<TextGameInput> {
       remainingIds: nextPack.remaining.toCollection,
     });
     await this.sessionsRepository.putSession(nextSession);
-    await this.sendQuestion(nextSession, terms);
+    return resultActions.concat(this.sendQuestion(nextSession, terms));
   }
 
   /**
@@ -231,9 +240,11 @@ export class TextGame extends BaseGame<TextGameInput> {
       Level: "unknown",
     });
     await this.metricsService.safePutMetric("InvalidAnswerTotal", 1, {});
-    await this.telegramService.sendMessage(
-      chatId,
-      "Нет активной тренировки. Напишите /start.",
-    );
+    return Collection.from([
+      Action.sendTgMessage({
+        chatId,
+        text: "Нет активной тренировки. Напишите /start.",
+      }),
+    ]);
   }
 }

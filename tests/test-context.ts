@@ -1,4 +1,5 @@
-import { Collection, HashMap } from "scats";
+import { Collection, HashMap, mutable } from "scats";
+import { Action } from "../src/action";
 import { Quiz } from "../src/quiz";
 import { TelegramUpdateMessage } from "../src/telegram-types";
 import { MenuService } from "../src/menu-service";
@@ -13,6 +14,7 @@ import { DeterministicQuestionGenerator } from "./mock/deterministic-question-ge
  * Shared test context for quiz/game suites.
  */
 export class Test {
+  private readonly actions = new mutable.ArrayBuffer<Action>();
   readonly telegramService = new NullTelegramService();
   readonly metricsService = new NullMetricsService();
   readonly sessionsRepository = new InMemorySessionsRepository();
@@ -32,6 +34,15 @@ export class Test {
     this.sheetsService = new DummySheetsService(
       HashMap.of(["A1", Collection.from(a1Rows)]),
     );
+    const collectMenuRenderer = async (action: Action) => {
+      this.actions.append(action);
+      await (this.menuService as any).renderActionImpl(action);
+    };
+    this.menuService.actionsRenderer = collectMenuRenderer;
+    const collectGameRendererFactory = (game: any) => async (action: Action) => {
+      this.actions.append(action);
+      await game.renderActionImpl(action);
+    };
     this.gameFactory = new GameFactory(
       this.telegramService as any,
       this.sessionsRepository as any,
@@ -40,17 +51,17 @@ export class Test {
       this.sheetsService,
       this.metricsService as any,
       "sheet-id",
+      collectGameRendererFactory,
     );
     this.quiz = new Quiz(
-      this.telegramService as any,
-      this.sheetsService,
       this.sessionsRepository as any,
-      this.questionGenerator as any,
-      this.metricsService as any,
       this.menuService,
       this.gameFactory,
-      "sheet-id",
     );
+  }
+
+  get renderedActions() {
+    return this.actions.toCollection;
   }
 
   createTgTextMessage(chatId: number, text: string) {

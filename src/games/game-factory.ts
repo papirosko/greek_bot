@@ -11,6 +11,8 @@ import { GoogleSpreadsheetsService } from "../sheets";
 import { MenuService } from "../menu-service";
 import { TextGame } from "./text-game";
 import { TextGameInput } from "./text-game-input";
+import { ActionsRenderer } from "../action";
+import { BaseGame } from "./base-game";
 
 type ChoiceGameInvocation = {
   kind: "choice";
@@ -50,6 +52,9 @@ export class GameFactory {
     private readonly sheetsService: GoogleSpreadsheetsService,
     private readonly metricsService: MetricsService,
     private readonly spreadsheetId: string,
+    private readonly actionsRendererFactory?: (
+      game: BaseGame<any>,
+    ) => ActionsRenderer,
   ) {}
 
   /**
@@ -99,7 +104,7 @@ export class GameFactory {
    * @returns ChoiceGame instance.
    */
   private createChoiceGame() {
-    return new ChoiceGame(
+    const game = new ChoiceGame(
       this.telegramService,
       this.sessionsRepository,
       this.questionGenerator,
@@ -108,6 +113,8 @@ export class GameFactory {
       this.metricsService,
       this.spreadsheetId,
     );
+    this.applyRenderer(game);
+    return game;
   }
 
   /**
@@ -115,7 +122,7 @@ export class GameFactory {
    * @returns TextGame instance.
    */
   private createTextGame() {
-    return new TextGame(
+    const game = new TextGame(
       this.telegramService,
       this.sessionsRepository,
       this.questionGenerator,
@@ -124,5 +131,13 @@ export class GameFactory {
       this.metricsService,
       this.spreadsheetId,
     );
+    this.applyRenderer(game);
+    return game;
+  }
+
+  private applyRenderer(game: BaseGame<any>) {
+    if (this.actionsRendererFactory) {
+      game.actionsRenderer = this.actionsRendererFactory(game);
+    }
   }
 }

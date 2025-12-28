@@ -1,3 +1,5 @@
+import { Collection } from "scats";
+import { ActionType } from "../../src/action";
 import { TrainingMode } from "../../src/training";
 import { Test } from "../test-context";
 
@@ -13,33 +15,37 @@ describe("Quiz start menu", () => {
 
     await test.quiz.handleUpdate(update);
 
-    expect(test.telegramService.sentMessages.length).toBe(1);
-    expect(test.telegramService.sentMessages[0]).toMatchObject({
-      chatId: 777,
-      text: "Выберите режим тренировки:",
-      keyboard: {
-        inline_keyboard: [
-          [
-            {
-              text: "Перевод (GR → RU)",
-              callback_data: `mode:${TrainingMode.GrRu}`,
-            },
-          ],
-          [
-            {
-              text: "Перевод (RU → GR)",
-              callback_data: `mode:${TrainingMode.RuGr}`,
-            },
-          ],
-          [
-            {
-              text: "Написание (RU → GR)",
-              callback_data: `mode:${TrainingMode.Write}`,
-            },
-          ],
-        ],
-      },
-    });
+    expect(test.renderedActions.map((action) => action.item)).toEqual(
+      Collection.of({
+        type: ActionType.SendTgMessage,
+        payload: {
+          chatId: 777,
+          text: "Выберите режим тренировки:",
+          keyboard: {
+            inline_keyboard: [
+              [
+                {
+                  text: "Перевод (GR → RU)",
+                  callback_data: `mode:${TrainingMode.GrRu}`,
+                },
+              ],
+              [
+                {
+                  text: "Перевод (RU → GR)",
+                  callback_data: `mode:${TrainingMode.RuGr}`,
+                },
+              ],
+              [
+                {
+                  text: "Написание (RU → GR)",
+                  callback_data: `mode:${TrainingMode.Write}`,
+                },
+              ],
+            ],
+          },
+        },
+      }),
+    );
   });
 
   it("shows level keyboard after mode selection", async () => {
@@ -47,23 +53,35 @@ describe("Quiz start menu", () => {
 
     await test.quiz.handleUpdate(update);
 
-    expect(test.telegramService.editedMessages.length).toBe(1);
-    expect(test.telegramService.editedMessages[0]).toMatchObject({
-      chatId: 222,
-      messageId: 333,
-      text: "Режим: Перевод (RU → GR). Выберите уровень:",
-      keyboard: {
-        inline_keyboard: [
-          [
-            { text: "A1", callback_data: "level:a1|mode:ru-gr" },
-            { text: "A2", callback_data: "level:a2|mode:ru-gr" },
-          ],
-          [
-            { text: "B1", callback_data: "level:b1|mode:ru-gr" },
-            { text: "B2", callback_data: "level:b2|mode:ru-gr" },
-          ],
-        ],
-      },
-    });
+    expect(test.renderedActions.map((action) => action.item)).toEqual(
+      Collection.of(
+        {
+          type: ActionType.AnswerCallback,
+          payload: {
+            callbackId: "cb-mode",
+          },
+        },
+        {
+          type: ActionType.UpdateLastMessage,
+          payload: {
+            chatId: 222,
+            messageId: 333,
+            text: "Режим: Перевод (RU → GR). Выберите уровень:",
+            keyboard: {
+              inline_keyboard: [
+                [
+                  { text: "A1", callback_data: "level:a1|mode:ru-gr" },
+                  { text: "A2", callback_data: "level:a2|mode:ru-gr" },
+                ],
+                [
+                  { text: "B1", callback_data: "level:b1|mode:ru-gr" },
+                  { text: "B2", callback_data: "level:b2|mode:ru-gr" },
+                ],
+              ],
+            },
+          },
+        },
+      ),
+    );
   });
 });

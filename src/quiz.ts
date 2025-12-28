@@ -1,38 +1,26 @@
-import { Collection, some } from "scats";
-import { MetricsService } from "./metrics";
-import { GoogleSpreadsheetsService } from "./sheets";
+import { Collection } from "scats";
+import { Action } from "./action";
 import { SessionsRepository } from "./sessions.repository";
-import { TelegramKeyboard, TelegramService } from "./telegram";
 import { TelegramUpdateMessage } from "./telegram-types";
 import { TrainingMode } from "./training";
-import { QuestionGenerator } from "./question-generator";
 import { MenuService } from "./menu-service";
 import { GameFactory } from "./games/game-factory";
 import { MetadataSerDe } from "./metadata-serde";
+import { RouteEvent, RouteEventType } from "./route-event";
 
 /**
  * Логика тренировки: вопросы, ответы, сессии.
  */
 export class Quiz {
   /**
-   * @param telegramService Telegram API client.
-   * @param sheetsService Google Sheets data reader.
    * @param sessionsRepository Session persistence repository.
-   * @param questionGenerator Question builder with randomized options.
-   * @param metricsService CloudWatch metrics client.
    * @param menuService Menu sender for top-level navigation.
    * @param gameFactory Factory for game instances and inputs.
-   * @param spreadsheetId Google Sheets spreadsheet id.
    */
   constructor(
-    private readonly telegramService: TelegramService,
-    private readonly sheetsService: GoogleSpreadsheetsService,
     private readonly sessionsRepository: SessionsRepository,
-    private readonly questionGenerator: QuestionGenerator,
-    private readonly metricsService: MetricsService,
     private readonly menuService: MenuService,
     private readonly gameFactory: GameFactory,
-    private readonly spreadsheetId: string,
   ) {}
 
   /**
@@ -57,165 +45,18 @@ export class Quiz {
               normalized === "/end" ||
               normalized === "завершить"
             ) {
-              await this.clearActiveSession(chatId);
-              await this.handleStart(chatId);
+              await this.routeEvent(RouteEvent.start(chatId));
             } else if (!normalized.startsWith("/")) {
               await this.gameFactory
                 .forUpdate(update)
                 .mapPromise((invocation) =>
-                  invocation.kind === "choice"
-                    ? invocation.game.invoke(invocation.input)
-                    : invocation.game.invoke(invocation.input),
+                  this.routeEvent(RouteEvent.gameInvocation(invocation)),
                 );
             } else {
-              await this.telegramService.sendMessage(
-                chatId,
-                "Пока поддерживается команда /start.",
-              );
+              await this.routeEvent(RouteEvent.unsupportedCommand(chatId));
             }
           });
       });
-  }
-
-  /**
-   * Builds the level selection keyboard for a given mode.
-   * @param mode Training mode for callback data.
-   * @returns Inline keyboard payload.
-   */
-  private buildLevelKeyboard(mode: TrainingMode) {
-    return TelegramKeyboard.inline([
-      [
-        { text: "A1", callback_data: `level:a1|mode:${mode}` },
-        { text: "A2", callback_data: `level:a2|mode:${mode}` },
-      ],
-      [
-        { text: "B1", callback_data: `level:b1|mode:${mode}` },
-        { text: "B2", callback_data: `level:b2|mode:${mode}` },
-      ],
-    ]);
-  }
-
-  /**
-   * Sends the main menu to a user.
-   * @param chatId Telegram chat id.
-   * @returns Promise resolved when the message is sent.
-   */
-  private handleStart(chatId: number) {
-    return this.menuService.sendStart(chatId);
-  }
-
-  /**
-   * Handles mode selection callbacks.
-   * @param chatId Telegram chat id.
-   * @param messageId Telegram message id to edit.
-   * @param callbackId Callback query id.
-   * @param mode Selected training mode.
-   * @returns Promise resolved when the menu is updated.
-   */
-  private handleMode(
-    chatId: number,
-    messageId: number,
-    callbackId: string,
-    mode: TrainingMode,
-  ) {
-    return Promise.all([
-      this.telegramService.answerCallback(callbackId),
-      this.telegramService.editMessageText(
-        chatId,
-        messageId,
-        `Режим: ${this.formatModeLabel(mode)}. Выберите уровень:`,
-        this.buildLevelKeyboard(mode),
-      ),
-    ]);
-  }
-
-  /**
-   * Formats a human-readable label for a training mode.
-   * @param mode Training mode.
-   * @returns Localized label.
-   */
-  private formatModeLabel(mode: TrainingMode) {
-    if (mode === TrainingMode.RuGr) {
-      return "Перевод (RU → GR)";
-    }
-    if (mode === TrainingMode.Write) {
-      return "Написание (RU → GR)";
-    }
-    return "Перевод (GR → RU)";
-  }
-
-  /**
-   * Handles level selection callbacks and starts a session.
-   * @param chatId Telegram chat id.
-   * @param messageId Telegram message id to edit.
-   * @param callbackId Callback query id.
-   * @param level Selected level.
-   * @param mode Selected training mode.
-   * @returns Promise resolved when the session is started or aborted.
-   */
-  private async handleLevel(
-    chatId: number,
-    messageId: number,
-    callbackId: string,
-    level: string,
-    mode: TrainingMode,
-  ) {
-    // Acknowledge the callback and update the menu message.
-    await Promise.all([
-      this.telegramService.answerCallback(callbackId),
-      this.telegramService.editMessageText(
-        chatId,
-        messageId,
-        `Выбран ${this.formatModeLabel(mode)} уровень ${level.toUpperCase()}.`,
-      ),
-    ]);
-
-    // Load terms for the selected level.
-    const data = await this.sheetsService.loadDataBase(
-      this.spreadsheetId,
-      level.toUpperCase(),
-    );
-    const terms = data.get(mode).toArray;
-    if (terms.length < 4) {
-      await this.telegramService.sendMessage(
-        chatId,
-        "Недостаточно глаголов для тренировки.",
-      );
-      return;
-    }
-
-    // Create a session and persist the first question.
-    const ids = Collection.fill<number>(terms.length)((index) => index);
-    const session = this.sessionsRepository.createSession(
-      chatId,
-      level,
-      mode,
-      ids,
-    );
-    const questionPack = this.questionGenerator.createQuestion(
-      new Collection(terms),
-      session.remainingIds.toSet,
-    );
-    if (!questionPack) {
-      await this.telegramService.sendMessage(
-        chatId,
-        "Не удалось сформировать вопрос.",
-      );
-      return;
-    }
-
-    // Persist and emit metrics, then send the first question.
-    const updated = session.copy({
-      current: some(questionPack.question),
-      remainingIds: questionPack.remaining.toCollection,
-    });
-    await this.sessionsRepository.putSession(updated);
-    await this.metricsService.safePutMetric("SessionStart", 1, {
-      Mode: updated.mode,
-      Level: updated.level.toUpperCase(),
-    });
-    await this.metricsService.safePutMetric("SessionStartTotal", 1, {});
-    await this.gameFactory.forMode(mode).sendQuestion(updated, terms);
   }
 
   /**
@@ -225,55 +66,51 @@ export class Quiz {
    */
   private handleCallback(update: TelegramUpdateMessage) {
     return update.callbackQuery.mapPromise(async (query) => {
-      // Try metadata-based routing for menu actions.
-      const metadataHandled = await MetadataSerDe.fromUpdate(update).mapPromise(
-        async (metadata) => {
-          if (metadata.data.startsWith("mode:")) {
-            const selectedMode = MetadataSerDe.parseMode(metadata.data);
-            await this.handleMode(
+      const metadataOption = MetadataSerDe.fromUpdate(update);
+      if (metadataOption.isDefined) {
+        const metadata = metadataOption.getOrElseThrow(
+          () => new Error("Missing metadata"),
+        );
+        if (metadata.data.startsWith("mode:")) {
+          const selectedMode = MetadataSerDe.parseMode(metadata.data);
+          await this.routeEvent(
+            RouteEvent.modeSelected(
               metadata.chatId,
               metadata.messageId,
               metadata.callbackId,
               selectedMode,
-            );
-            return true;
-          }
+            ),
+          );
+          return;
+        }
 
-          // Parse level selection and route accordingly.
-          const levelMeta = MetadataSerDe.parseLevel(metadata.data);
-          if (levelMeta.isDefined) {
-            const parsed = levelMeta.getOrElseThrow(
-              () => new Error("Missing level metadata"),
-            );
-            await this.handleLevel(
+        const levelMeta = MetadataSerDe.parseLevel(metadata.data);
+        if (levelMeta.isDefined) {
+          const parsed = levelMeta.getOrElseThrow(
+            () => new Error("Missing level metadata"),
+          );
+          await this.routeEvent(
+            RouteEvent.levelSelected(
               metadata.chatId,
               metadata.messageId,
               metadata.callbackId,
               parsed.level,
               parsed.mode,
-            );
-            return true;
-          }
-
-          return false;
-        },
-      );
-      if (metadataHandled.contains(true)) {
-        return;
+            ),
+          );
+          return;
+        }
       }
 
-      // Route to game handlers or acknowledge the callback.
       const invocation = this.gameFactory.forUpdate(update);
       if (invocation.isDefined) {
         await invocation.mapPromise((item) =>
-          item.kind === "choice"
-            ? item.game.invoke(item.input)
-            : item.game.invoke(item.input),
+          this.routeEvent(RouteEvent.gameInvocation(item)),
         );
         return;
       }
 
-      await this.telegramService.answerCallback(query.id);
+      await this.routeEvent(RouteEvent.callbackUnknown(query.id));
     });
   }
 
@@ -289,5 +126,106 @@ export class Quiz {
     await activeOption.mapPromise((active) =>
       this.sessionsRepository.deleteSession(active.sessionId),
     );
+  }
+
+  /**
+   * Routes internal events to menu or game actions.
+   * @param event Internal route event.
+   * @returns Promise resolved when the event is handled.
+   */
+  private async routeEvent(event: RouteEvent) {
+    if (event.type === RouteEventType.Start) {
+      const payload = event.payload as { chatId: number };
+      await this.clearActiveSession(payload.chatId);
+      await this.renderMenuActions(this.menuService.start(payload.chatId));
+      return;
+    }
+    if (event.type === RouteEventType.UnsupportedCommand) {
+      const payload = event.payload as { chatId: number };
+      await this.renderMenuActions(
+        this.menuService.unsupportedCommand(payload.chatId),
+      );
+      return;
+    }
+    if (event.type === RouteEventType.ModeSelected) {
+      const payload = event.payload as {
+        chatId: number;
+        messageId: number;
+        callbackId: string;
+        mode: TrainingMode;
+      };
+      await this.renderMenuActions(
+        this.menuService.modeSelected(
+          payload.chatId,
+          payload.messageId,
+          payload.callbackId,
+          payload.mode,
+        ),
+      );
+      return;
+    }
+    if (event.type === RouteEventType.LevelSelected) {
+      const payload = event.payload as {
+        chatId: number;
+        messageId: number;
+        callbackId: string;
+        level: string;
+        mode: TrainingMode;
+      };
+      const game = this.gameFactory.forMode(payload.mode);
+      const actions = await game.handleLevel(
+        payload.chatId,
+        payload.messageId,
+        payload.callbackId,
+        payload.level,
+        payload.mode,
+      );
+      await actions.mapPromise((action) => game.renderAction(action));
+      return;
+    }
+    if (event.type === RouteEventType.GameInvocation) {
+      const payload = event.payload as {
+        invocation: {
+          game: {
+            invoke: (input: unknown) => Promise<Collection<Action>>;
+            renderAction: (action: Action) => Promise<void>;
+          };
+          input: unknown;
+        };
+      };
+      const actions = await payload.invocation.game.invoke(
+        payload.invocation.input,
+      );
+      await actions.mapPromise((action) =>
+        payload.invocation.game.renderAction(action),
+      );
+      return;
+    }
+    if (event.type === RouteEventType.CallbackUnknown) {
+      const payload = event.payload as { callbackId: string };
+      await this.renderMenuActions(
+        Collection.from([
+          Action.answerCallback({ callbackId: payload.callbackId }),
+        ]),
+      );
+    }
+  }
+
+  /**
+   * Renders actions using a game renderer.
+   * @param actions Renderable actions.
+   * @param renderer Game renderer.
+   * @returns Promise resolved when rendered.
+   */
+  /**
+   * Renders menu actions.
+   * @param actions Renderable actions.
+   * @returns Promise resolved when actions are rendered.
+   */
+  private async renderMenuActions(actions: Collection<Action>) {
+    if (actions.length === 0) {
+      return;
+    }
+    await actions.mapPromise((action) => this.menuService.renderAction(action));
   }
 }

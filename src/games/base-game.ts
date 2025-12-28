@@ -9,11 +9,22 @@ import { TrainingMode } from "../training";
 import { QuestionGenerator } from "../question-generator";
 import { GameInput } from "./game-input";
 import { MenuService } from "../menu-service";
+import {
+  Action,
+  ActionsRenderer,
+  ActionType,
+  AnswerCallbackPayload,
+  EditMessageTextPayload,
+  SendMessagePayload,
+  SetKeyboardPayload,
+} from "../action";
 
 /**
  * Base class for game flows that handle session progression and messaging.
  */
 export abstract class BaseGame<TInput extends GameInput> {
+  private _actionsRenderer: ActionsRenderer = (action) =>
+    this.renderActionImpl(action);
   /**
    * @param telegramService Telegram API client.
    * @param sessionsRepository Session persistence repository.
@@ -39,9 +50,62 @@ export abstract class BaseGame<TInput extends GameInput> {
   /**
    * Runs one step of the game using the given input.
    * @param input Parsed game input.
-   * @returns Promise resolved when the step completes.
+   * @returns Collection of renderable actions.
    */
-  abstract invoke(input: TInput): Promise<void>;
+  abstract invoke(input: TInput): Promise<Collection<Action>>;
+
+  async renderAction(action: Action): Promise<void> {
+    await this._actionsRenderer(action);
+  }
+
+  /**
+   * Default action rendering implementation.
+   * @param action Renderable action.
+   * @returns Promise resolved when the action is rendered.
+   */
+  protected async renderActionImpl(action: Action): Promise<void> {
+    if (action.type === ActionType.SendTgMessage) {
+      const payload = action.payload as SendMessagePayload;
+      const response = await this.telegramService.sendMessage(
+        payload.chatId,
+        payload.text,
+        payload.keyboard,
+      );
+      await this.trackSessionMessage(payload, response.result?.message_id);
+      return;
+    }
+    if (action.type === ActionType.UpdateLastMessage) {
+      const payload = action.payload as EditMessageTextPayload;
+      await this.telegramService.editMessageText(
+        payload.chatId,
+        payload.messageId,
+        payload.text,
+        payload.keyboard,
+      );
+      return;
+    }
+    if (action.type === ActionType.SetKeyboard) {
+      const payload = action.payload as SetKeyboardPayload;
+      await this.telegramService.editMessageReplyMarkup(
+        payload.chatId,
+        payload.messageId,
+        payload.keyboard,
+      );
+      return;
+    }
+    if (action.type === ActionType.AnswerCallback) {
+      const payload = action.payload as AnswerCallbackPayload;
+      await this.telegramService.answerCallback(payload.callbackId);
+    }
+  }
+
+  /**
+   * Overrides the action renderer (useful for tests).
+   * @param renderer Custom action renderer.
+   */
+  set actionsRenderer(renderer: ActionsRenderer) {
+    this._actionsRenderer = renderer.bind(this);
+  }
 
   /**
    * Calculates the total question count for the session.
@@ -109,13 +173,10 @@ export abstract class BaseGame<TInput extends GameInput> {
    * @param terms Term list for rendering prompts.
    * @returns Promise resolved when the message is sent and stored.
    */
-  async sendQuestion(
-    session: Session,
-    terms: { greek: string; russian: string }[],
-  ) {
+  sendQuestion(session: Session, terms: { greek: string; russian: string }[]) {
     // Ensure we have a current question to render.
     if (!session.current.isDefined) {
-      return;
+      return Collection.empty as Collection<Action>;
     }
     // Build prompt and options for the current question.
     const current = session.current.getOrElseThrow(
@@ -126,28 +187,20 @@ export abstract class BaseGame<TInput extends GameInput> {
       session.mode === TrainingMode.RuGr
         ? current.options.map((id) => terms[id].greek).toArray
         : current.options.map((id) => terms[id].russian).toArray;
-    const response =
+    const text = this.buildPrompt(session, questionTerm);
+    const keyboard =
       session.mode === TrainingMode.Write
-        ? await this.telegramService.sendMessage(
-            session.userId,
-            this.buildPrompt(session, questionTerm),
-          )
-        : await this.telegramService.sendMessage(
-            session.userId,
-            this.buildPrompt(session, questionTerm),
-            this.buildOptionsKeyboard(session.sessionId, optionTexts),
-          );
+        ? undefined
+        : this.buildOptionsKeyboard(session.sessionId, optionTexts);
 
-    // Persist message id to support edits later.
-    const messageId = response.result?.message_id;
-    if (messageId) {
-      const updated = session.copy({
-        current: session.current.map((question) =>
-          question.copy({ messageId: some(messageId) }),
-        ),
-      });
-      await this.sessionsRepository.putSession(updated);
-    }
+    return Collection.from([
+      Action.sendTgMessage({
+        chatId: session.userId,
+        text,
+        keyboard,
+        trackSession: session,
+      }),
+    ]);
   }
 
   /**
@@ -161,5 +214,26 @@ export abstract class BaseGame<TInput extends GameInput> {
       terms,
       session.remainingIds.toSet,
     );
+  }
+
+  /**
+   * Tracks the message id for the current question when requested.
+   * @param payload Send-message payload.
+   * @param messageId Telegram message id.
+   * @returns Promise resolved when session is updated.
+   */
+  private async trackSessionMessage(
+    payload: SendMessagePayload,
+    messageId?: number,
+  ) {
+    if (!payload.trackSession || !messageId) {
+      return;
+    }
+    const updated = payload.trackSession.copy({
+      current: payload.trackSession.current.map((question) =>
+        question.copy({ messageId: some(messageId) }),
+      ),
+    });
+    await this.sessionsRepository.putSession(updated);
   }
 }

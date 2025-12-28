@@ -21,6 +21,14 @@ export class NullTelegramService {
     text: string;
     keyboard?: unknown;
   }> = [];
+  /**
+   * Captured outbound editMessageReplyMarkup calls.
+   */
+  readonly editedKeyboards: Array<{
+    chatId: number;
+    messageId: number;
+    keyboard?: unknown;
+  }> = [];
 
   /**
    * Mocks sending a Telegram message.
@@ -60,6 +68,26 @@ export class NullTelegramService {
       chatId: _chatId,
       messageId: _messageId,
       text: _text,
+      keyboard: _keyboard,
+    });
+    return { ok: true, result: { message_id: _messageId } };
+  }
+
+  /**
+   * Mocks editing a Telegram message keyboard.
+   * @param _chatId Telegram chat id.
+   * @param _messageId Telegram message id.
+   * @param _keyboard Updated keyboard.
+   * @returns TelegramResponse stub.
+   */
+  async editMessageReplyMarkup(
+    _chatId: number,
+    _messageId: number,
+    _keyboard: unknown,
+  ): Promise<TelegramResponse<{ message_id: number }>> {
+    this.editedKeyboards.push({
+      chatId: _chatId,
+      messageId: _messageId,
       keyboard: _keyboard,
     });
     return { ok: true, result: { message_id: _messageId } };

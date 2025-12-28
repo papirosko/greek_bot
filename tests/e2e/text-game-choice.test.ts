@@ -1,3 +1,5 @@
+import { Collection } from "scats";
+import { ActionType } from "../../src/action";
 import { Test } from "../test-context";
 
 const extractSessionId = (keyboard?: unknown) => {
@@ -32,35 +34,53 @@ describe("Quiz start game", () => {
     await test.quiz.handleUpdate(update);
 
     // Verify the first question and answer options.
-    expect(test.telegramService.sentMessages.length).toBe(1);
-    expect(test.telegramService.sentMessages[0]).toMatchObject({
-      chatId: 999,
-      text: "Вопрос 1/4\nПереведи: αλφα",
-      keyboard: {
-        inline_keyboard: [
-          [
-            {
-              text: "alpha",
-              callback_data: expect.stringMatching(/^s=.*&a=0$/),
+    expect(test.renderedActions.map((action) => action.item)).toEqual(
+      Collection.of(
+        {
+          type: ActionType.AnswerCallback,
+          payload: { callbackId: "cb-start" },
+        },
+        {
+          type: ActionType.UpdateLastMessage,
+          payload: {
+            chatId: 999,
+            messageId: 55,
+            text: "Выбран Перевод (GR → RU) уровень A1.",
+          },
+        },
+        {
+          type: ActionType.SendTgMessage,
+          payload: {
+            chatId: 999,
+            text: "Вопрос 1/4\nПереведи: αλφα",
+            keyboard: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "alpha",
+                    callback_data: expect.stringMatching(/^s=.*&a=0$/),
+                  },
+                  {
+                    text: "beta",
+                    callback_data: expect.stringMatching(/^s=.*&a=1$/),
+                  },
+                ],
+                [
+                  {
+                    text: "gamma",
+                    callback_data: expect.stringMatching(/^s=.*&a=2$/),
+                  },
+                  {
+                    text: "delta",
+                    callback_data: expect.stringMatching(/^s=.*&a=3$/),
+                  },
+                ],
+              ],
             },
-            {
-              text: "beta",
-              callback_data: expect.stringMatching(/^s=.*&a=1$/),
-            },
-          ],
-          [
-            {
-              text: "gamma",
-              callback_data: expect.stringMatching(/^s=.*&a=2$/),
-            },
-            {
-              text: "delta",
-              callback_data: expect.stringMatching(/^s=.*&a=3$/),
-            },
-          ],
-        ],
-      },
-    });
+          },
+        },
+      ),
+    );
   });
 
   it("edits result and sends next question for correct and wrong answers", async () => {
@@ -72,10 +92,10 @@ describe("Quiz start game", () => {
       test.createTgCallback(chatId, 10, "level:a1|mode:gr-ru", "cb-level"),
     );
 
-    expect(test.telegramService.sentMessages.length).toBe(1);
-    const baseEdits = test.telegramService.editedMessages.length;
+    const baseActions = test.renderedActions.length;
     const sessionId = extractSessionId(
-      test.telegramService.sentMessages[0].keyboard,
+      (test.renderedActions.toArray[2].payload as { keyboard?: unknown })
+        .keyboard,
     );
 
     // Answer correctly and expect edited result plus next question.
@@ -88,16 +108,63 @@ describe("Quiz start game", () => {
       ),
     );
 
-    expect(test.telegramService.editedMessages.length).toBe(baseEdits + 1);
-    expect(
-      test.telegramService.editedMessages[
-        test.telegramService.editedMessages.length - 1
-      ].text,
-    ).toContain("✅ Верно");
-    expect(test.telegramService.sentMessages.length).toBe(2);
+    const firstAnswerActions = test.renderedActions
+      .map((action) => action.item)
+      .slice(baseActions, baseActions + 3);
+    expect(firstAnswerActions).toEqual(
+      Collection.of(
+        {
+          type: ActionType.AnswerCallback,
+          payload: { callbackId: "cb-correct" },
+        },
+        {
+          type: ActionType.UpdateLastMessage,
+          payload: {
+            chatId,
+            messageId: questionMessageId,
+            text: expect.stringContaining("✅ Верно"),
+          },
+        },
+        {
+          type: ActionType.SendTgMessage,
+          payload: {
+            chatId,
+            text: "Вопрос 2/4\nПереведи: βητα",
+            keyboard: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "beta",
+                    callback_data: expect.stringMatching(/^s=.*&a=0$/),
+                  },
+                  {
+                    text: "alpha",
+                    callback_data: expect.stringMatching(/^s=.*&a=1$/),
+                  },
+                ],
+                [
+                  {
+                    text: "gamma",
+                    callback_data: expect.stringMatching(/^s=.*&a=2$/),
+                  },
+                  {
+                    text: "delta",
+                    callback_data: expect.stringMatching(/^s=.*&a=3$/),
+                  },
+                ],
+              ],
+            },
+          },
+        },
+      ),
+    );
 
     const nextSessionId = extractSessionId(
-      test.telegramService.sentMessages[1].keyboard,
+      (
+        test.renderedActions.toArray[baseActions + 2].payload as {
+          keyboard?: unknown;
+        }
+      ).keyboard,
     );
 
     // Answer incorrectly and expect another edit plus next question.
@@ -110,12 +177,55 @@ describe("Quiz start game", () => {
       ),
     );
 
-    expect(test.telegramService.editedMessages.length).toBe(baseEdits + 2);
-    expect(
-      test.telegramService.editedMessages[
-        test.telegramService.editedMessages.length - 1
-      ].text,
-    ).toContain("❌ Неверно");
-    expect(test.telegramService.sentMessages.length).toBe(3);
+    const secondAnswerActions = test.renderedActions
+      .map((action) => action.item)
+      .slice(baseActions + 3, baseActions + 6);
+    expect(secondAnswerActions).toEqual(
+      Collection.of(
+        {
+          type: ActionType.AnswerCallback,
+          payload: { callbackId: "cb-wrong" },
+        },
+        {
+          type: ActionType.UpdateLastMessage,
+          payload: {
+            chatId,
+            messageId: questionMessageId,
+            text: expect.stringContaining("❌ Неверно"),
+          },
+        },
+        {
+          type: ActionType.SendTgMessage,
+          payload: {
+            chatId,
+            text: "Вопрос 3/4\nПереведи: γαμμα",
+            keyboard: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "gamma",
+                    callback_data: expect.stringMatching(/^s=.*&a=0$/),
+                  },
+                  {
+                    text: "alpha",
+                    callback_data: expect.stringMatching(/^s=.*&a=1$/),
+                  },
+                ],
+                [
+                  {
+                    text: "beta",
+                    callback_data: expect.stringMatching(/^s=.*&a=2$/),
+                  },
+                  {
+                    text: "delta",
+                    callback_data: expect.stringMatching(/^s=.*&a=3$/),
+                  },
+                ],
+              ],
+            },
+          },
+        },
+      ),
+    );
   });
 });
