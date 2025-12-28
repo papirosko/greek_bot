@@ -140,6 +140,8 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
         : correctTerm.russian;
 
     const isCorrect = input.answerIndex === current.correctIndex;
+    const answeredIndex = this.currentQuestionNumber(session);
+    const totalQuestions = this.totalQuestions(session);
     const updated = session.copy({
       totalAsked: session.totalAsked + 1,
       correctCount: session.correctCount + (isCorrect ? 1 : 0),
@@ -156,8 +158,8 @@ export class ChoiceGame extends LeveledBaseGame<ChoiceGameInput> {
         chatId: input.chatId,
         messageId: input.messageId,
         action: "renderAnswerResult",
-        currentQuestionIndex: this.currentQuestionNumber(updated),
-        totalQuestions: this.totalQuestions(updated),
+        currentQuestionIndex: answeredIndex,
+        totalQuestions,
         term: promptTerm,
         answerText: selectedText,
         correctText,

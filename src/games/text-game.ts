@@ -109,6 +109,8 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
     const correctAnswer = this.normalizeInput(questionTerm.greek);
     const isCorrect = this.matchesGreekInput(answer, correctAnswer);
 
+    const answeredIndex = this.currentQuestionNumber(session);
+    const totalQuestions = this.totalQuestions(session);
     const updated = session.copy({
       totalAsked: session.totalAsked + 1,
       correctCount: session.correctCount + (isCorrect ? 1 : 0),
@@ -121,8 +123,8 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
     const resultPayload = {
       action: "renderAnswerResult",
       chatId: input.chatId,
-      currentQuestionIndex: this.currentQuestionNumber(updated),
-      totalQuestions: this.totalQuestions(updated),
+      currentQuestionIndex: answeredIndex,
+      totalQuestions,
       term: questionTerm.russian,
       answerText: answer,
       correctText: questionTerm.greek,

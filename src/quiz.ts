@@ -220,7 +220,11 @@ export class Quiz {
         payload.mode,
         payload.category,
       );
-      await actions.mapPromise((action) => game.renderAction(action));
+      await actions.mapPromise((action) =>
+        this.isMenuRenderAction(action)
+          ? this.menuService.renderAction(action)
+          : game.renderAction(action),
+      );
       return;
     }
     if (event.type === RouteEventType.GameInvocation) {

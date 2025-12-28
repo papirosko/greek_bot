@@ -60,7 +60,7 @@ describe("Text game answers", () => {
             chatId,
             messageId: 1,
             action: "renderAnswerResult",
-            currentQuestionIndex: 2,
+            currentQuestionIndex: 1,
             totalQuestions: 4,
             term: "alpha",
             answerText: "αλφα",

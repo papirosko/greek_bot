@@ -188,6 +188,8 @@ export class TextTopicGame extends BaseGame<TextTopicGameInput> {
     const correctTopic = topics.get(current.options.get(current.correctIndex));
 
     const isCorrect = input.answerIndex === current.correctIndex;
+    const answeredIndex = this.currentQuestionNumber(session);
+    const totalQuestions = this.totalQuestions(session);
     const updated = session.copy({
       totalAsked: session.totalAsked + 1,
       correctCount: session.correctCount + (isCorrect ? 1 : 0),
@@ -199,8 +201,8 @@ export class TextTopicGame extends BaseGame<TextTopicGameInput> {
         chatId: input.chatId,
         messageId: input.messageId,
         action: "renderAnswerResult",
-        currentQuestionIndex: this.currentQuestionNumber(updated),
-        totalQuestions: this.totalQuestions(updated),
+        currentQuestionIndex: answeredIndex,
+        totalQuestions,
         term: questionItem.text,
         answerText: selectedTopic.topic,
         correctText: correctTopic.topic,
