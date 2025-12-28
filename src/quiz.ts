@@ -237,7 +237,9 @@ export class Quiz {
         payload.invocation.input,
       );
       await actions.mapPromise((action) =>
-        payload.invocation.game.renderAction(action),
+        this.isMenuRenderAction(action)
+          ? this.menuService.renderAction(action)
+          : payload.invocation.game.renderAction(action),
       );
       return;
     }
@@ -267,5 +269,26 @@ export class Quiz {
       return;
     }
     await actions.mapPromise((action) => this.menuService.renderAction(action));
+  }
+
+  /**
+   * Determines if an action targets the menu renderer.
+   * @param action Renderable action.
+   * @returns True when the action is a menu render payload.
+   */
+  private isMenuRenderAction(action: Action) {
+    const payload = action.payload as { action?: string };
+    if (!payload?.action) {
+      return false;
+    }
+    return (
+      payload.action === "renderStartMenu" ||
+      payload.action === "renderModeSelected" ||
+      payload.action === "renderCategorySelected" ||
+      payload.action === "renderLevelSelected" ||
+      payload.action === "renderInsufficientTerms" ||
+      payload.action === "renderQuestionBuildFailed" ||
+      payload.action === "renderUnsupportedCommand"
+    );
   }
 }
