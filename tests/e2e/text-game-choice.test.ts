@@ -1,6 +1,7 @@
 import { Collection } from "scats";
 import { ActionType } from "../../src/action";
 import { TrainingMode } from "../../src/training";
+import { WordCategory } from "../../src/word-category";
 import { Test } from "../test-context";
 
 const extractSessionId = (payload?: { sessionId?: string }) => {
@@ -22,7 +23,7 @@ describe("Quiz start game", () => {
     const update = test.createTgCallback(
       999,
       55,
-      "level:a1|mode:gr-ru",
+      "level:a1|mode:gr-ru|category:verbs",
       "cb-start",
     );
 
@@ -43,6 +44,7 @@ describe("Quiz start game", () => {
             action: "renderLevelSelected",
             mode: TrainingMode.GrRu,
             level: "a1",
+            category: WordCategory.Verbs,
           },
         },
         {
@@ -67,7 +69,12 @@ describe("Quiz start game", () => {
 
     // Start a session and capture the initial question.
     await test.quiz.handleUpdate(
-      test.createTgCallback(chatId, 10, "level:a1|mode:gr-ru", "cb-level"),
+      test.createTgCallback(
+        chatId,
+        10,
+        "level:a1|mode:gr-ru|category:verbs",
+        "cb-level",
+      ),
     );
 
     const baseActions = test.renderedActions.length;

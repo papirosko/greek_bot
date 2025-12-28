@@ -1,12 +1,14 @@
 import { Collection, Option, option } from "scats";
 import { SessionQuestion, SessionQuestionItem } from "./session-question";
 import { TrainingMode } from "./training";
+import { WordCategory, WordCategoryService } from "./word-category";
 
 export type SessionItem = {
   sessionId: string;
   userId: number;
   level: string;
   mode: TrainingMode;
+  category?: WordCategory;
   remainingIds: number[];
   totalAsked: number;
   correctCount: number;
@@ -25,6 +27,7 @@ export class Session {
    * @param userId Telegram user id
    * @param level уровень (A1/A2/B1/B2)
    * @param mode режим тренировки
+   * @param category категория слов
    * @param remainingIds индексы терминов, которые еще не заданы
    * @param totalAsked число заданных вопросов
    * @param correctCount число правильных ответов
@@ -38,6 +41,7 @@ export class Session {
     readonly userId: number,
     readonly level: string,
     readonly mode: TrainingMode,
+    readonly category: WordCategory,
     readonly remainingIds: Collection<number>,
     readonly totalAsked: number,
     readonly correctCount: number,
@@ -58,6 +62,7 @@ export class Session {
       option(o.userId).getOrElseValue(this.userId),
       option(o.level).getOrElseValue(this.level),
       option(o.mode).getOrElseValue(this.mode),
+      option(o.category).getOrElseValue(this.category),
       option<Collection<number>>(o.remainingIds).getOrElseValue(
         this.remainingIds,
       ),
@@ -80,6 +85,7 @@ export class Session {
       userId: this.userId,
       level: this.level,
       mode: this.mode,
+      category: this.category,
       remainingIds: this.remainingIds.toArray,
       totalAsked: this.totalAsked,
       correctCount: this.correctCount,
@@ -110,6 +116,7 @@ export class Session {
       Number(obj.userId ?? 0),
       String(obj.level ?? ""),
       (obj.mode ?? TrainingMode.GrRu) as TrainingMode,
+      (obj.category ?? WordCategoryService.defaultCategory()) as WordCategory,
       new Collection(remainingIds),
       Number(obj.totalAsked ?? 0),
       Number(obj.correctCount ?? 0),

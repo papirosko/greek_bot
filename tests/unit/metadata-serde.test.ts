@@ -2,6 +2,7 @@ import { none, some } from "scats";
 import { MetadataSerDe } from "../../src/metadata-serde";
 import { TelegramUpdateMessage } from "../../src/telegram-types";
 import { TrainingMode } from "../../src/training";
+import { WordCategory } from "../../src/word-category";
 
 const makeUpdate = (data?: string) =>
   TelegramUpdateMessage.fromJson({
@@ -45,6 +46,20 @@ describe("MetadataSerDe", () => {
     expect(
       MetadataSerDe.parseLevel("level:a2|mode:write"),
     ).toEqual(some({ level: "a2", mode: TrainingMode.Write }));
+    expect(
+      MetadataSerDe.parseLevel("level:a1|mode:ru-gr|category:verbs"),
+    ).toEqual(
+      some({ level: "a1", mode: TrainingMode.RuGr, category: WordCategory.Verbs }),
+    );
     expect(MetadataSerDe.parseLevel("mode:ru-gr")).toEqual(none);
+  });
+
+  it("parses category and mode from metadata", () => {
+    expect(
+      MetadataSerDe.parseCategory("category:nouns|mode:gr-ru"),
+    ).toEqual(some({ category: WordCategory.Nouns, mode: TrainingMode.GrRu }));
+    expect(MetadataSerDe.parseCategory("category:verbs|mode:write")).toEqual(
+      none,
+    );
   });
 });

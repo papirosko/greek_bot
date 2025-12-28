@@ -9,6 +9,7 @@ import { NullTelegramService } from "./mock/null-telegram-service";
 import { NullMetricsService } from "./mock/null-metrics-service";
 import { InMemorySessionsRepository } from "./mock/in-memory-sessions-repository";
 import { DeterministicQuestionGenerator } from "./mock/deterministic-question-generator";
+import { WordCategoryService } from "../src/word-category";
 
 /**
  * Shared test context for quiz/game suites.
@@ -32,7 +33,10 @@ export class Test {
       ["δελτα", "delta"],
     ];
     this.sheetsService = new DummySheetsService(
-      HashMap.of(["A1", Collection.from(a1Rows)]),
+      HashMap.of([
+        WordCategoryService.sheetName("a1"),
+        Collection.from(a1Rows),
+      ]),
     );
     const collectMenuRenderer = async (action: Action) => {
       this.actions.append(action);

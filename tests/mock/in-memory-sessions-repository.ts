@@ -3,6 +3,7 @@ import { Session } from "../../src/session";
 import { SessionId } from "../../src/session-id";
 import { TimeUtils } from "../../src/time-utils";
 import { TrainingMode } from "../../src/training";
+import { WordCategory, WordCategoryService } from "../../src/word-category";
 
 /**
  * In-memory sessions repository for tests.
@@ -17,6 +18,7 @@ export class InMemorySessionsRepository {
    * @param level Training level.
    * @param mode Training mode.
    * @param remainingIds Remaining term ids.
+   * @param category Word category.
    * @returns New Session instance.
    */
   createSession(
@@ -24,12 +26,14 @@ export class InMemorySessionsRepository {
     level: string,
     mode: TrainingMode,
     remainingIds: Collection<number>,
+    category?: WordCategory,
   ): Session {
     return new Session(
       SessionId.next(),
       userId,
       level,
       mode,
+      category ?? WordCategoryService.defaultCategory(),
       remainingIds,
       0,
       0,

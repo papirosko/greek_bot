@@ -3,6 +3,7 @@ import { Action } from "./action";
 import { SessionsRepository } from "./sessions.repository";
 import { TelegramUpdateMessage } from "./telegram-types";
 import { TrainingMode } from "./training";
+import { WordCategory } from "./word-category";
 import { MenuService } from "./menu-service";
 import { GameFactory } from "./games/game-factory";
 import { MetadataSerDe } from "./metadata-serde";
@@ -84,6 +85,23 @@ export class Quiz {
           return;
         }
 
+        const categoryMeta = MetadataSerDe.parseCategory(metadata.data);
+        if (categoryMeta.isDefined) {
+          const parsed = categoryMeta.getOrElseThrow(
+            () => new Error("Missing category metadata"),
+          );
+          await this.routeEvent(
+            RouteEvent.categorySelected(
+              metadata.chatId,
+              metadata.messageId,
+              metadata.callbackId,
+              parsed.mode,
+              parsed.category,
+            ),
+          );
+          return;
+        }
+
         const levelMeta = MetadataSerDe.parseLevel(metadata.data);
         if (levelMeta.isDefined) {
           const parsed = levelMeta.getOrElseThrow(
@@ -96,6 +114,7 @@ export class Quiz {
               metadata.callbackId,
               parsed.level,
               parsed.mode,
+              parsed.category,
             ),
           );
           return;
@@ -164,6 +183,25 @@ export class Quiz {
       );
       return;
     }
+    if (event.type === RouteEventType.CategorySelected) {
+      const payload = event.payload as {
+        chatId: number;
+        messageId: number;
+        callbackId: string;
+        mode: TrainingMode;
+        category: WordCategory;
+      };
+      await this.renderMenuActions(
+        this.menuService.categorySelected(
+          payload.chatId,
+          payload.messageId,
+          payload.callbackId,
+          payload.mode,
+          payload.category,
+        ),
+      );
+      return;
+    }
     if (event.type === RouteEventType.LevelSelected) {
       const payload = event.payload as {
         chatId: number;
@@ -171,6 +209,7 @@ export class Quiz {
         callbackId: string;
         level: string;
         mode: TrainingMode;
+        category?: WordCategory;
       };
       const game = this.gameFactory.forMode(payload.mode);
       const actions = await game.handleLevel(
@@ -179,6 +218,7 @@ export class Quiz {
         payload.callbackId,
         payload.level,
         payload.mode,
+        payload.category,
       );
       await actions.mapPromise((action) => game.renderAction(action));
       return;

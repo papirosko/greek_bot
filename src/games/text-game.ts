@@ -10,6 +10,7 @@ import { TelegramService } from "../telegram";
 import { SessionsRepository } from "../sessions.repository";
 import { QuestionGenerator } from "../question-generator";
 import { MenuService } from "../menu-service";
+import { WordCategoryService } from "../word-category";
 
 /**
  * Text-input game implementation.
@@ -101,7 +102,7 @@ export class TextGame extends LeveledBaseGame<TextGameInput> {
     // Load terms and compute result payload.
     const data = await this.sheetsService.loadDataBase(
       this.spreadsheetId,
-      session.level.toUpperCase(),
+      WordCategoryService.sheetName(session.level, session.category),
     );
     const terms = data.get(session.mode).toArray;
     const questionTerm = terms[current.verbId];

@@ -11,6 +11,7 @@ import {
 } from "./action";
 import { TelegramKeyboard, TelegramService } from "./telegram";
 import { TrainingMode } from "./training";
+import { WordCategory, WordCategoryService } from "./word-category";
 
 /**
  * Service for rendering and sending the main menu keyboard.
@@ -77,12 +78,41 @@ export class MenuService {
   }
 
   /**
+   * Builds actions for selected word category acknowledgement.
+   * @param chatId Telegram chat id.
+   * @param messageId Telegram message id to edit.
+   * @param callbackId Callback query id.
+   * @param mode Selected training mode.
+   * @param category Selected word category.
+   * @returns Collection of renderable actions.
+   */
+  categorySelected(
+    chatId: number,
+    messageId: number,
+    callbackId: string,
+    mode: TrainingMode,
+    category: WordCategory,
+  ) {
+    return Collection.of(
+      Action.answerCallback({ callbackId }),
+      Action.updateLastMessage({
+        chatId,
+        messageId,
+        action: "renderCategorySelected",
+        mode,
+        category,
+      }),
+    );
+  }
+
+  /**
    * Builds actions for selected level acknowledgement.
    * @param chatId Telegram chat id.
    * @param messageId Telegram message id to edit.
    * @param callbackId Callback query id.
    * @param level Selected level.
    * @param mode Selected training mode.
+   * @param category Selected word category.
    * @returns Collection of renderable actions.
    */
   levelSelected(
@@ -91,16 +121,19 @@ export class MenuService {
     callbackId: string,
     level: string,
     mode: TrainingMode,
+    category?: WordCategory,
   ) {
+    const payload = {
+      chatId,
+      messageId,
+      action: "renderLevelSelected" as const,
+      mode,
+      level,
+      ...(category ? { category } : {}),
+    };
     return Collection.of(
       Action.answerCallback({ callbackId }),
-      Action.updateLastMessage({
-        chatId,
-        messageId,
-        action: "renderLevelSelected",
-        mode,
-        level,
-      }),
+      Action.updateLastMessage(payload),
     );
   }
 
@@ -218,18 +251,33 @@ export class MenuService {
       };
     }
     if (payload.action === "renderModeSelected") {
+      if (payload.mode === TrainingMode.Write) {
+        return {
+          text: `Режим: ${this.formatModeLabel(payload.mode)}. Выберите уровень:`,
+          keyboard: this.buildLevelKeyboard(payload.mode),
+        };
+      }
       return {
-        text: `Режим: ${this.formatModeLabel(payload.mode)}. Выберите уровень:`,
-        keyboard: this.buildLevelKeyboard(payload.mode),
+        text: `Режим: ${this.formatModeLabel(payload.mode)}. Выберите тип слов:`,
+        keyboard: this.buildCategoryKeyboard(payload.mode),
+      };
+    }
+    if (payload.action === "renderCategorySelected") {
+      return {
+        text: `Тип слов: ${WordCategoryService.formatLabel(payload.category)}. Выберите уровень:`,
+        keyboard: this.buildLevelKeyboard(payload.mode, payload.category),
       };
     }
     if (payload.action === "renderLevelSelected") {
+      const categoryLabel = payload.category
+        ? `${WordCategoryService.formatLabel(payload.category)}, `
+        : "";
       return {
-        text: `Выбран ${this.formatModeLabel(payload.mode)} уровень ${payload.level.toUpperCase()}.`,
+        text: `Выбран ${categoryLabel}${this.formatModeLabel(payload.mode)} уровень ${payload.level.toUpperCase()}.`,
       };
     }
     if (payload.action === "renderInsufficientTerms") {
-      return { text: "Недостаточно глаголов для тренировки." };
+      return { text: "Недостаточно слов для тренировки." };
     }
     if (payload.action === "renderQuestionBuildFailed") {
       return { text: "Не удалось сформировать вопрос." };
@@ -243,17 +291,41 @@ export class MenuService {
   /**
    * Builds the level selection keyboard for a given mode.
    * @param mode Training mode for callback data.
+   * @param category Optional word category for callback data.
    * @returns Inline keyboard payload.
    */
-  private buildLevelKeyboard(mode: TrainingMode) {
+  private buildLevelKeyboard(mode: TrainingMode, category?: WordCategory) {
+    const categorySuffix = category ? `|category:${category}` : "";
     return TelegramKeyboard.inline([
       [
-        { text: "A1", callback_data: `level:a1|mode:${mode}` },
-        { text: "A2", callback_data: `level:a2|mode:${mode}` },
+        { text: "A1", callback_data: `level:a1|mode:${mode}${categorySuffix}` },
+        { text: "A2", callback_data: `level:a2|mode:${mode}${categorySuffix}` },
       ],
       [
-        { text: "B1", callback_data: `level:b1|mode:${mode}` },
-        { text: "B2", callback_data: `level:b2|mode:${mode}` },
+        { text: "B1", callback_data: `level:b1|mode:${mode}${categorySuffix}` },
+        { text: "B2", callback_data: `level:b2|mode:${mode}${categorySuffix}` },
+      ],
+    ]);
+  }
+
+  /**
+   * Builds the word category selection keyboard.
+   * @param mode Training mode for callback data.
+   * @returns Inline keyboard payload.
+   */
+  private buildCategoryKeyboard(mode: TrainingMode) {
+    return TelegramKeyboard.inline([
+      [
+        {
+          text: "Глаголы",
+          callback_data: `category:${WordCategory.Verbs}|mode:${mode}`,
+        },
+      ],
+      [
+        {
+          text: "Существительные",
+          callback_data: `category:${WordCategory.Nouns}|mode:${mode}`,
+        },
       ],
     ]);
   }

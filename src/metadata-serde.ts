@@ -1,6 +1,7 @@
 import { Option, option } from "scats";
 import { TelegramUpdateMessage } from "./telegram-types";
 import { TrainingMode } from "./training";
+import { WordCategory } from "./word-category";
 
 /**
  * DTO with callback metadata extracted from a Telegram update.
@@ -22,6 +23,12 @@ export class CallbackMetadata {
 
 type LevelMetadata = {
   level: string;
+  mode: TrainingMode;
+  category?: WordCategory;
+};
+
+type CategoryMetadata = {
+  category: WordCategory;
   mode: TrainingMode;
 };
 
@@ -68,9 +75,26 @@ export class MetadataSerDe {
    */
   static parseLevel(data: string): Option<LevelMetadata> {
     return option(
-      data.match(/^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru|write)$/),
+      data.match(
+        /^level:([a-z0-9]+)\|mode:(ru-gr|gr-ru|write)(?:\|category:(verbs|nouns))?$/,
+      ),
     ).map((match) => ({
       level: match[1],
+      mode: match[2] as TrainingMode,
+      category: match[3] as WordCategory | undefined,
+    }));
+  }
+
+  /**
+   * Parses word category and mode from callback data.
+   * @param data Raw callback data.
+   * @returns Option with parsed category metadata.
+   */
+  static parseCategory(data: string): Option<CategoryMetadata> {
+    return option(
+      data.match(/^category:(verbs|nouns)\|mode:(ru-gr|gr-ru)$/),
+    ).map((match) => ({
+      category: match[1] as WordCategory,
       mode: match[2] as TrainingMode,
     }));
   }

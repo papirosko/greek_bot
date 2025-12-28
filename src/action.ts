@@ -1,4 +1,5 @@
 import { TrainingMode } from "./training";
+import { WordCategory } from "./word-category";
 import { TelegramInlineKeyboard } from "./telegram-types";
 import { Session } from "./session";
 
@@ -111,11 +112,19 @@ export type RenderModeSelectedPayload = {
   mode: TrainingMode;
 };
 
+export type RenderCategorySelectedPayload = {
+  action: "renderCategorySelected";
+  chatId: number;
+  mode: TrainingMode;
+  category: WordCategory;
+};
+
 export type RenderLevelSelectedPayload = {
   action: "renderLevelSelected";
   chatId: number;
   mode: TrainingMode;
   level: string;
+  category?: WordCategory;
 };
 
 export type RenderInsufficientTermsPayload = {
@@ -145,6 +154,7 @@ export type GameRenderPayload =
 export type MenuRenderPayload =
   | RenderStartMenuPayload
   | RenderModeSelectedPayload
+  | RenderCategorySelectedPayload
   | RenderLevelSelectedPayload
   | RenderInsufficientTermsPayload
   | RenderQuestionBuildFailedPayload

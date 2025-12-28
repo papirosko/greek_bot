@@ -10,6 +10,7 @@ import { Collection, Option, none, option } from "scats";
 import { Session, SessionItem } from "./session";
 import { SessionId } from "./session-id";
 import { TrainingMode } from "./training";
+import { WordCategory, WordCategoryService } from "./word-category";
 import { TimeUtils } from "./time-utils";
 
 /**
@@ -34,6 +35,7 @@ export class SessionsRepository {
    * @param level Training level.
    * @param mode Training mode.
    * @param remainingIds Remaining term ids.
+   * @param category Word category.
    * @returns New Session instance.
    */
   createSession(
@@ -41,12 +43,14 @@ export class SessionsRepository {
     level: string,
     mode: TrainingMode,
     remainingIds: Collection<number>,
+    category?: WordCategory,
   ): Session {
     return new Session(
       SessionId.next(),
       userId,
       level,
       mode,
+      category ?? WordCategoryService.defaultCategory(),
       remainingIds,
       0,
       0,

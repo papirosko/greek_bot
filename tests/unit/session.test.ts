@@ -2,6 +2,7 @@ import { Collection, none, some } from "scats";
 import { Session } from "../../src/session";
 import { SessionQuestion } from "../../src/session-question";
 import { TrainingMode } from "../../src/training";
+import { WordCategory } from "../../src/word-category";
 
 describe("Session", () => {
   it("creates from json with defaults", () => {
@@ -27,6 +28,7 @@ describe("Session", () => {
     expect(session.userId).toBe(10);
     expect(session.level).toBe("A1");
     expect(session.mode).toBe(TrainingMode.GrRu);
+    expect(session.category).toBe(WordCategory.Verbs);
     expect(session.remainingIds.toArray).toEqual([1, 2, 3]);
     expect(session.totalAsked).toBe(4);
     expect(session.correctCount).toBe(2);
@@ -56,6 +58,7 @@ describe("Session", () => {
       20,
       "B1",
       TrainingMode.RuGr,
+      WordCategory.Nouns,
       new Collection([4, 5]),
       1,
       1,
@@ -70,6 +73,7 @@ describe("Session", () => {
       userId: 20,
       level: "B1",
       mode: TrainingMode.RuGr,
+      category: WordCategory.Nouns,
       remainingIds: [4, 5],
       totalAsked: 1,
       correctCount: 1,
@@ -91,6 +95,7 @@ describe("Session", () => {
       30,
       "A2",
       TrainingMode.Write,
+      WordCategory.Verbs,
       new Collection([1, 2, 3]),
       0,
       0,

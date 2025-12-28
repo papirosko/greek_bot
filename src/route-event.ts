@@ -1,5 +1,6 @@
 import { GameInvocation } from "./games/game-factory";
 import { TrainingMode } from "./training";
+import { WordCategory } from "./word-category";
 
 /**
  * Internal event types for routing.
@@ -8,6 +9,7 @@ export enum RouteEventType {
   Start = "start",
   UnsupportedCommand = "unsupportedCommand",
   ModeSelected = "modeSelected",
+  CategorySelected = "categorySelected",
   LevelSelected = "levelSelected",
   GameInvocation = "gameInvocation",
   CallbackUnknown = "callbackUnknown",
@@ -25,8 +27,16 @@ export type RouteEventPayload =
       chatId: number;
       messageId: number;
       callbackId: string;
+      mode: TrainingMode;
+      category: WordCategory;
+    }
+  | {
+      chatId: number;
+      messageId: number;
+      callbackId: string;
       level: string;
       mode: TrainingMode;
+      category?: WordCategory;
     }
   | { invocation: GameInvocation }
   | { callbackId: string };
@@ -85,12 +95,38 @@ export class RouteEvent {
   }
 
   /**
+   * Builds a category selection event.
+   * @param chatId Telegram chat id.
+   * @param messageId Telegram message id.
+   * @param callbackId Callback query id.
+   * @param mode Training mode.
+   * @param category Selected word category.
+   * @returns RouteEvent instance.
+   */
+  static categorySelected(
+    chatId: number,
+    messageId: number,
+    callbackId: string,
+    mode: TrainingMode,
+    category: WordCategory,
+  ) {
+    return new RouteEvent(RouteEventType.CategorySelected, {
+      chatId,
+      messageId,
+      callbackId,
+      mode,
+      category,
+    });
+  }
+
+  /**
    * Builds a level selection event.
    * @param chatId Telegram chat id.
    * @param messageId Telegram message id.
    * @param callbackId Callback query id.
    * @param level Selected level.
    * @param mode Training mode.
+   * @param category Selected word category.
    * @returns RouteEvent instance.
    */
   static levelSelected(
@@ -99,6 +135,7 @@ export class RouteEvent {
     callbackId: string,
     level: string,
     mode: TrainingMode,
+    category?: WordCategory,
   ) {
     return new RouteEvent(RouteEventType.LevelSelected, {
       chatId,
@@ -106,6 +143,7 @@ export class RouteEvent {
       callbackId,
       level,
       mode,
+      category,
     });
   }
 

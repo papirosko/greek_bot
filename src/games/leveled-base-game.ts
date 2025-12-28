@@ -10,6 +10,7 @@ import { TelegramService } from "../telegram";
 import { MenuService } from "../menu-service";
 import { BaseGame } from "./base-game";
 import { GameInput } from "./game-input";
+import { WordCategory, WordCategoryService } from "../word-category";
 
 /**
  * Base game with level-based session setup.
@@ -51,6 +52,7 @@ export abstract class LeveledBaseGame<
    * @param callbackId Callback query id.
    * @param level Selected level.
    * @param mode Selected training mode.
+   * @param category Selected word category.
    * @returns Collection of renderable actions.
    */
   async handleLevel(
@@ -59,6 +61,7 @@ export abstract class LeveledBaseGame<
     callbackId: string,
     level: string,
     mode: TrainingMode,
+    category?: WordCategory,
   ): Promise<Collection<Action>> {
     const actions = this.menuService.levelSelected(
       chatId,
@@ -66,11 +69,12 @@ export abstract class LeveledBaseGame<
       callbackId,
       level,
       mode,
+      category,
     );
 
     const data = await this.sheetsService.loadDataBase(
       this.spreadsheetId,
-      level.toUpperCase(),
+      WordCategoryService.sheetName(level, category),
     );
     const terms = data.get(mode).toArray;
     if (terms.length < 4) {
@@ -83,6 +87,7 @@ export abstract class LeveledBaseGame<
       level,
       mode,
       ids,
+      category,
     );
     const questionPack = this.questionGenerator.createQuestion(
       new Collection<Term>(terms),
