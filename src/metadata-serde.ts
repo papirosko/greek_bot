@@ -24,7 +24,7 @@ export class CallbackMetadata {
 type LevelMetadata = {
   level: string;
   mode: TrainingMode;
-  category?: WordCategory;
+  category: WordCategory | undefined;
 };
 
 type CategoryMetadata = {
