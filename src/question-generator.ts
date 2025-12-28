@@ -27,7 +27,15 @@ export class QuestionGenerator {
     );
     const correctIndex = options.indexOf(verbId);
 
-    const question = new SessionQuestion(verbId, options, correctIndex, none);
+    const question = new SessionQuestion(
+      verbId,
+      options,
+      correctIndex,
+      none,
+      none,
+      none,
+      none,
+    );
 
     return { question, remaining };
   }

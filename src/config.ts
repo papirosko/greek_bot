@@ -10,6 +10,10 @@ export class Config {
    * @param serviceAccountJson Google service account JSON.
    * @param sessionsTable DynamoDB sessions table name.
    * @param sheetsCacheTtlMs Sheets cache TTL in ms.
+   * @param aiApiKey AI API key (OpenAI-compatible).
+   * @param aiApiBaseUrl AI API base URL.
+   * @param aiModel AI model name.
+   * @param aiTimeoutMs AI request timeout in ms.
    */
   constructor(
     readonly telegramToken: string,
@@ -17,6 +21,10 @@ export class Config {
     readonly serviceAccountJson: string,
     readonly sessionsTable: string,
     readonly sheetsCacheTtlMs: number,
+    readonly aiApiKey: string,
+    readonly aiApiBaseUrl: string,
+    readonly aiModel: string,
+    readonly aiTimeoutMs: number,
   ) {}
 
   /**
@@ -31,6 +39,10 @@ export class Config {
       option(o.serviceAccountJson).getOrElseValue(this.serviceAccountJson),
       option(o.sessionsTable).getOrElseValue(this.sessionsTable),
       option(o.sheetsCacheTtlMs).getOrElseValue(this.sheetsCacheTtlMs),
+      option(o.aiApiKey).getOrElseValue(this.aiApiKey),
+      option(o.aiApiBaseUrl).getOrElseValue(this.aiApiBaseUrl),
+      option(o.aiModel).getOrElseValue(this.aiModel),
+      option(o.aiTimeoutMs).getOrElseValue(this.aiTimeoutMs),
     );
   }
 
@@ -64,12 +76,17 @@ export class ConfigLoader {
    * @returns Config loaded from environment.
    */
   static loadConfig(): Config {
+    const timeoutMs = Number(process.env.AI_TIMEOUT_MS);
     return new Config(
       process.env.TELEGRAM_TOKEN ?? "",
       process.env.GOOGLE_SHEETS_ID ?? "",
       process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? "",
       process.env.SESSIONS_TABLE ?? "sessions",
       5 * 60 * 1000,
+      process.env.AI_API_KEY ?? "",
+      process.env.AI_API_BASE_URL ?? "",
+      process.env.AI_MODEL ?? "",
+      Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 15000,
     );
   }
 }

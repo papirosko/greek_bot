@@ -37,6 +37,12 @@ export class MenuService {
         callback_data: `mode:${TrainingMode.TextTopic}`,
       },
     ],
+    [
+      {
+        text: "Факт + вопрос (GR)",
+        callback_data: `mode:${TrainingMode.FactQuiz}`,
+      },
+    ],
   ]);
 
   /**
@@ -259,7 +265,8 @@ export class MenuService {
     if (payload.action === "renderModeSelected") {
       if (
         payload.mode === TrainingMode.Write ||
-        payload.mode === TrainingMode.TextTopic
+        payload.mode === TrainingMode.TextTopic ||
+        payload.mode === TrainingMode.FactQuiz
       ) {
         return {
           text: `Режим: ${this.formatModeLabel(payload.mode)}. Выберите уровень:`,
@@ -365,6 +372,9 @@ export class MenuService {
     }
     if (mode === TrainingMode.TextTopic) {
       return "Тема по тексту (GR → RU)";
+    }
+    if (mode === TrainingMode.FactQuiz) {
+      return "Факт + вопрос (GR)";
     }
     return "Перевод (GR → RU)";
   }

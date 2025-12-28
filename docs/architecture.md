@@ -29,6 +29,7 @@ The project is a Telegram-based training bot for Greek vocabulary. The system is
 - `TelegramService` (`src/telegram.ts`) — Telegram Bot API client and update parser.
 - `MetricsService` (`src/metrics.ts`) — CloudWatch metrics client with safe wrapper.
 - `GoogleSpreadsheetsService` (`src/sheets.ts`) — Reads terms from Google Sheets and caches results.
+- `FactQuestionService` (`src/fact-question-service.ts`) — Generates fact questions via an AI API.
 - `SessionsRepository` (`src/sessions.repository.ts`) — DynamoDB persistence for sessions; creates sessions and maps to/from DTOs.
 - `MenuService` (`src/menu-service.ts`) — Constructs and sends the mode selection keyboard.
 
@@ -37,6 +38,7 @@ The project is a Telegram-based training bot for Greek vocabulary. The system is
 - `ChoiceGame` (`src/games/choice-game.ts`) — Multiple-choice gameplay (button selection).
 - `TextGame` (`src/games/text-game.ts`) — Text input gameplay (writing answers).
 - `GameFactory` (`src/games/game-factory.ts`) — Creates game instances and maps updates to `GameInput`.
+- `FactQuizGame` (`src/games/fact-quiz-game.ts`) — AI-generated fact text with multiple-choice answers.
 
 ### Game Inputs
 - `GameInput` (`src/games/game-input.ts`) — Abstract input base class.
@@ -58,4 +60,3 @@ The project is a Telegram-based training bot for Greek vocabulary. The system is
 - Jest is used for unit tests.
 - Mocks are in `tests/mock/` (null Telegram/Metrics services and in-memory sessions repository).
 - Deterministic test helpers avoid randomness in question ordering.
-

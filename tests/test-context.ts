@@ -9,12 +9,14 @@ import {
   TextTopicRow,
   DummySheetsService,
 } from "./mock/dummy-sheets-service";
+import { DummyFactQuestionService } from "./mock/dummy-fact-question-service";
 import { NullTelegramService } from "./mock/null-telegram-service";
 import { NullMetricsService } from "./mock/null-metrics-service";
 import { InMemorySessionsRepository } from "./mock/in-memory-sessions-repository";
 import { DeterministicQuestionGenerator } from "./mock/deterministic-question-generator";
 import { WordCategory, WordCategoryService } from "../src/word-category";
 import { TextTopicService } from "../src/text-topic";
+import { FactTopicService } from "../src/fact-topic";
 
 /**
  * Shared test context for quiz/game suites.
@@ -26,6 +28,7 @@ export class Test {
   readonly sessionsRepository = new InMemorySessionsRepository();
   readonly questionGenerator = new DeterministicQuestionGenerator() as any;
   readonly menuService = new MenuService(this.telegramService as any);
+  readonly factQuestionService = new DummyFactQuestionService();
   readonly sheetsService: DummySheetsService;
   readonly gameFactory: GameFactory;
   readonly quiz: Quiz;
@@ -67,6 +70,10 @@ export class Test {
         "прием у врача",
       ],
     ];
+    const factA1Rows: [string, string][] = [
+      ["Χρόνος", "Факт о времени и {сутках|дне}."],
+      ["Природа", "Факт о погоде и {солнце|облаках}."],
+    ];
     this.sheetsService = new DummySheetsService(
       HashMap.of(
         [WordCategoryService.sheetName("a1"), Collection.from(a1Rows)],
@@ -79,7 +86,11 @@ export class Test {
           Collection.from(adverbsA1Rows),
         ],
       ),
-      HashMap.of([TextTopicService.sheetName("a1"), Collection.from(textA1Rows)]),
+      HashMap.of([
+        TextTopicService.sheetName("a1"),
+        Collection.from(textA1Rows),
+      ]),
+      HashMap.of([FactTopicService.sheetName("a1"), Collection.from(factA1Rows)]),
     );
     const collectMenuRenderer = async (action: Action) => {
       this.actions.append(action);
@@ -97,6 +108,7 @@ export class Test {
       this.menuService,
       this.sheetsService,
       this.metricsService as any,
+      this.factQuestionService as any,
       "sheet-id",
       collectGameRendererFactory,
     );

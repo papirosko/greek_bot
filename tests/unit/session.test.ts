@@ -1,4 +1,4 @@
-import { Collection, none, some } from "scats";
+import { Collection, Nil, none, some } from "scats";
 import { Session } from "../../src/session";
 import { SessionQuestion } from "../../src/session-question";
 import { TrainingMode } from "../../src/training";
@@ -30,6 +30,7 @@ describe("Session", () => {
     expect(session.mode).toBe(TrainingMode.GrRu);
     expect(session.category).toBe(WordCategory.Verbs);
     expect(session.remainingIds.toArray).toEqual([1, 2, 3]);
+    expect(session.recentFacts.toArray).toEqual([]);
     expect(session.totalAsked).toBe(4);
     expect(session.correctCount).toBe(2);
     expect(session.totalCount).toBe(3);
@@ -49,8 +50,11 @@ describe("Session", () => {
   it("exposes item with serialized collections", () => {
     const question = new SessionQuestion(
       3,
-      new Collection([1, 2, 3, 4]),
+      Collection.of(1, 2, 3, 4),
       1,
+      none,
+      none,
+      none,
       none,
     );
     const session = new Session(
@@ -59,7 +63,8 @@ describe("Session", () => {
       "B1",
       TrainingMode.RuGr,
       WordCategory.Nouns,
-      new Collection([4, 5]),
+      Collection.of(4, 5),
+      Nil,
       1,
       1,
       2,
@@ -75,6 +80,7 @@ describe("Session", () => {
       mode: TrainingMode.RuGr,
       category: WordCategory.Nouns,
       remainingIds: [4, 5],
+      recentFacts: [],
       totalAsked: 1,
       correctCount: 1,
       totalCount: 2,
@@ -83,6 +89,9 @@ describe("Session", () => {
         options: [1, 2, 3, 4],
         correctIndex: 1,
         messageId: undefined,
+        promptText: undefined,
+        questionText: undefined,
+        answerOptions: undefined,
       },
       expiresAt: 300,
       updatedAt: 400,
@@ -96,7 +105,8 @@ describe("Session", () => {
       "A2",
       TrainingMode.Write,
       WordCategory.Verbs,
-      new Collection([1, 2, 3]),
+      Collection.of(1, 2, 3),
+      Nil,
       0,
       0,
       3,
@@ -106,7 +116,7 @@ describe("Session", () => {
     );
 
     const updated = base.copy({
-      remainingIds: new Collection([2, 3]),
+      remainingIds: Collection.of(2, 3),
       totalAsked: 1,
       correctCount: 1,
     });

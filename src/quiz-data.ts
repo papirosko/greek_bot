@@ -61,6 +61,7 @@ export class QuizDataBase {
         [TrainingMode.RuGr, terms],
         [TrainingMode.Write, terms],
         [TrainingMode.TextTopic, terms],
+        [TrainingMode.FactQuiz, terms],
       ),
     );
   }

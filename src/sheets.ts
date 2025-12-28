@@ -4,6 +4,7 @@ import { Collection, Try } from "scats";
 import { Base64Utils } from "./base64-utils";
 import { QuizDataBase, Term } from "./quiz-data";
 import { TextTopic, TextTopicService } from "./text-topic";
+import { FactTopic, FactTopicService } from "./fact-topic";
 
 type ServiceAccount = {
   client_email: string;
@@ -20,12 +21,18 @@ type CachedTextTopics = {
   data: Collection<TextTopic>;
 };
 
+type CachedFactTopics = {
+  fetchedAt: number;
+  data: Collection<FactTopic>;
+};
+
 /**
  * Сервис для чтения данных из Google Spreadsheets.
  */
 export class GoogleSpreadsheetsService {
   private readonly cache = new Map<string, CachedLevel>();
   private readonly textTopicsCache = new Map<string, CachedTextTopics>();
+  private readonly factTopicsCache = new Map<string, CachedFactTopics>();
 
   /**
    * @param serviceAccountJson Google service account JSON.
@@ -77,6 +84,29 @@ export class GoogleSpreadsheetsService {
     }
     const data = await this.fetchTextTopics(spreadsheetId, level);
     this.textTopicsCache.set(cacheKey, {
+      data,
+      fetchedAt: Date.now(),
+    });
+    return data;
+  }
+
+  /**
+   * Загружает список тем для фактов по уровню.
+   * @param spreadsheetId Google Sheets id.
+   * @param level Training level key.
+   * @returns Collection of fact topics.
+   */
+  async loadFactTopics(
+    spreadsheetId: string,
+    level: string,
+  ): Promise<Collection<FactTopic>> {
+    const cacheKey = `${spreadsheetId}:fact:${level}`;
+    const cached = this.factTopicsCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < this.cacheTtlMs) {
+      return cached.data;
+    }
+    const data = await this.fetchFactTopics(spreadsheetId, level);
+    this.factTopicsCache.set(cacheKey, {
       data,
       fetchedAt: Date.now(),
     });
@@ -263,6 +293,57 @@ export class GoogleSpreadsheetsService {
               .filter((row) => row.isDefined)
               .map((row) =>
                 row.getOrElseThrow(() => new Error("Missing text topic")),
+              );
+            resolve(new Collection(topics));
+          });
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  }
+
+  /**
+   * Fetches a fact-topic range from Google Sheets.
+   * @param spreadsheetId Google Sheets id.
+   * @param level Training level key.
+   * @returns Collection of fact topics.
+   */
+  private async fetchFactTopics(
+    spreadsheetId: string,
+    level: string,
+  ): Promise<Collection<FactTopic>> {
+    const account = this.parseServiceAccount();
+    const token = await this.requestToken(account);
+    const sheetName = FactTopicService.sheetName(level);
+    const range = `${encodeURIComponent(sheetName)}!A2:B`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?majorDimension=ROWS`;
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(
+        url,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            if (res.statusCode !== 200) {
+              return reject(
+                new Error(`Sheets error ${res.statusCode}: ${data}`),
+              );
+            }
+            const payload = JSON.parse(data) as { values?: string[][] };
+            const values = payload.values ?? [];
+            const topics = values
+              .map((row) => FactTopic.fromRow(row))
+              .filter((row) => row.isDefined)
+              .map((row) =>
+                row.getOrElseThrow(() => new Error("Missing fact topic")),
               );
             resolve(new Collection(topics));
           });

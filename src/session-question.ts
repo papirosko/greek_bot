@@ -5,6 +5,9 @@ export type SessionQuestionItem = {
   options: number[];
   correctIndex: number;
   messageId?: number;
+  promptText?: string;
+  questionText?: string;
+  answerOptions?: string[];
 };
 
 /**
@@ -22,6 +25,9 @@ export class SessionQuestion {
     readonly options: Collection<number>,
     readonly correctIndex: number,
     readonly messageId: Option<number>,
+    readonly promptText: Option<string>,
+    readonly questionText: Option<string>,
+    readonly answerOptions: Option<Collection<string>>,
   ) {}
 
   /**
@@ -35,6 +41,11 @@ export class SessionQuestion {
       option<Collection<number>>(o.options).getOrElseValue(this.options),
       option(o.correctIndex).getOrElseValue(this.correctIndex),
       option<Option<number>>(o.messageId).getOrElseValue(this.messageId),
+      option<Option<string>>(o.promptText).getOrElseValue(this.promptText),
+      option<Option<string>>(o.questionText).getOrElseValue(this.questionText),
+      option<Option<Collection<string>>>(o.answerOptions).getOrElseValue(
+        this.answerOptions,
+      ),
     );
   }
 
@@ -53,12 +64,20 @@ export class SessionQuestion {
       ? obj.options.map((value) => Number(value))
       : [];
     const messageId = option(obj.messageId).map((value) => Number(value));
+    const promptText = option(obj.promptText).map((value) => String(value));
+    const questionText = option(obj.questionText).map((value) => String(value));
+    const answerOptions = Array.isArray(obj.answerOptions)
+      ? option(new Collection(obj.answerOptions.map((value) => String(value))))
+      : option<Collection<string>>(undefined);
 
     return new SessionQuestion(
       Number(obj.verbId ?? 0),
       new Collection(options),
       Number(obj.correctIndex ?? 0),
       messageId,
+      promptText,
+      questionText,
+      answerOptions,
     );
   }
 
@@ -72,6 +91,10 @@ export class SessionQuestion {
       options: this.options.toArray,
       correctIndex: this.correctIndex,
       messageId: this.messageId.orUndefined,
+      promptText: this.promptText.orUndefined,
+      questionText: this.questionText.orUndefined,
+      answerOptions: this.answerOptions.map((items) => items.toArray)
+        .orUndefined,
     };
   }
 }

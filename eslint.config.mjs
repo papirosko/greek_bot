@@ -10,6 +10,21 @@ export default [
         ignores: ['dist/**', 'node_modules/**'],
     },
     js.configs.recommended,
+    {
+        files: ['scripts/**/*.js'],
+        languageOptions: {
+            sourceType: 'commonjs',
+            globals: {
+                require: 'readonly',
+                module: 'readonly',
+                __dirname: 'readonly',
+                Buffer: 'readonly',
+                process: 'readonly',
+                console: 'readonly',
+                URLSearchParams: 'readonly',
+            },
+        },
+    },
 
     // Конфигурация для исходного кода (src/**/*.ts)
     {

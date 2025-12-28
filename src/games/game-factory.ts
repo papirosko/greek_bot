@@ -15,6 +15,9 @@ import { ActionsRenderer } from "../action";
 import { BaseGame } from "./base-game";
 import { TextTopicGame } from "./text-topic-game";
 import { TextTopicGameInput } from "./text-topic-game-input";
+import { FactQuizGame } from "./fact-quiz-game";
+import { FactQuizGameInput } from "./fact-quiz-game-input";
+import { FactQuestionService } from "../fact-question-service";
 
 type ChoiceGameInvocation = {
   kind: "choice";
@@ -34,13 +37,20 @@ type TextTopicGameInvocation = {
   input: TextTopicGameInput;
 };
 
+type FactQuizGameInvocation = {
+  kind: "fact-quiz";
+  game: FactQuizGame;
+  input: FactQuizGameInput;
+};
+
 /**
  * Union describing a resolved game instance and input.
  */
 export type GameInvocation =
   | ChoiceGameInvocation
   | TextGameInvocation
-  | TextTopicGameInvocation;
+  | TextTopicGameInvocation
+  | FactQuizGameInvocation;
 
 /**
  * Factory that creates games and resolves updates to inputs.
@@ -62,6 +72,7 @@ export class GameFactory {
     private readonly menuService: MenuService,
     private readonly sheetsService: GoogleSpreadsheetsService,
     private readonly metricsService: MetricsService,
+    private readonly factQuestionService: FactQuestionService,
     private readonly spreadsheetId: string,
     private readonly actionsRendererFactory?: (
       game: BaseGame<any>,
@@ -76,6 +87,9 @@ export class GameFactory {
   forMode(mode: TrainingMode) {
     if (mode === TrainingMode.TextTopic) {
       return this.createTextTopicGame();
+    }
+    if (mode === TrainingMode.FactQuiz) {
+      return this.createFactQuizGame();
     }
     return mode === TrainingMode.Write
       ? this.createTextGame()
@@ -96,6 +110,18 @@ export class GameFactory {
         game: textTopicGame,
         input: textTopicInput.getOrElseThrow(
           () => new Error("Missing text-topic input"),
+        ),
+      });
+    }
+
+    const factQuizGame = this.createFactQuizGame();
+    const factQuizInput = factQuizGame.buildInput(update);
+    if (factQuizInput.isDefined) {
+      return some<GameInvocation>({
+        kind: "fact-quiz",
+        game: factQuizGame,
+        input: factQuizInput.getOrElseThrow(
+          () => new Error("Missing fact-quiz input"),
         ),
       });
     }
@@ -173,6 +199,25 @@ export class GameFactory {
       this.menuService,
       this.sheetsService,
       this.metricsService,
+      this.spreadsheetId,
+    );
+    this.applyRenderer(game);
+    return game;
+  }
+
+  /**
+   * Builds a fact-quiz game instance.
+   * @returns FactQuizGame instance.
+   */
+  private createFactQuizGame() {
+    const game = new FactQuizGame(
+      this.telegramService,
+      this.sessionsRepository,
+      this.questionGenerator,
+      this.menuService,
+      this.sheetsService,
+      this.metricsService,
+      this.factQuestionService,
       this.spreadsheetId,
     );
     this.applyRenderer(game);

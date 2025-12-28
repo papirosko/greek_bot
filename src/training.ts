@@ -6,4 +6,5 @@ export enum TrainingMode {
   RuGr = "ru-gr",
   Write = "write",
   TextTopic = "text-topic",
+  FactQuiz = "fact-quiz",
 }

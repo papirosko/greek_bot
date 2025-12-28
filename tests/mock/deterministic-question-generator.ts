@@ -22,9 +22,17 @@ export class DeterministicQuestionGenerator {
     const allIds = Collection.fill<number>(terms.length)((index) => index);
     const distractors = allIds.filter((id) => id !== verbId).toArray;
     const selected = new Collection(distractors.slice(0, 3));
-    const options = new Collection([verbId]).concat(selected);
+    const options = Collection.of(verbId).concat(selected);
     const correctIndex = 0;
-    const question = new SessionQuestion(verbId, options, correctIndex, none);
+    const question = new SessionQuestion(
+      verbId,
+      options,
+      correctIndex,
+      none,
+      none,
+      none,
+      none,
+    );
 
     return {
       question,

@@ -56,6 +56,11 @@ describe("MetadataSerDe", () => {
     ).toEqual(
       some({ level: "b1", mode: TrainingMode.TextTopic, category: undefined }),
     );
+    expect(
+      MetadataSerDe.parseLevel("level:b2|mode:fact-quiz"),
+    ).toEqual(
+      some({ level: "b2", mode: TrainingMode.FactQuiz, category: undefined }),
+    );
     expect(MetadataSerDe.parseLevel("mode:ru-gr")).toEqual(none);
   });
 

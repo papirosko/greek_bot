@@ -52,6 +52,7 @@ export class SessionsRepository {
       mode,
       category ?? WordCategoryService.defaultCategory(),
       remainingIds,
+      new Collection<string>([]),
       0,
       0,
       remainingIds.length,

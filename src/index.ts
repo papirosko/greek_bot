@@ -11,6 +11,7 @@ import { ConfigLoader } from "./config";
 import { QuestionGenerator } from "./question-generator";
 import { MenuService } from "./menu-service";
 import { GameFactory } from "./games/game-factory";
+import { FactQuestionService } from "./fact-question-service";
 
 /**
  * Load and validate configuration from the environment.
@@ -35,6 +36,12 @@ const sheetsService = new GoogleSpreadsheetsService(
 const sessionsRepository = new SessionsRepository(config.sessionsTable);
 const questionGenerator = new QuestionGenerator();
 const menuService = new MenuService(telegramService);
+const factQuestionService = new FactQuestionService(
+  config.aiApiKey,
+  config.aiApiBaseUrl,
+  config.aiModel,
+  config.aiTimeoutMs,
+);
 const gameFactory = new GameFactory(
   telegramService,
   sessionsRepository,
@@ -42,6 +49,7 @@ const gameFactory = new GameFactory(
   menuService,
   sheetsService,
   metricsService,
+  factQuestionService,
   config.sheetsId,
 );
 const quiz = new Quiz(sessionsRepository, menuService, gameFactory);

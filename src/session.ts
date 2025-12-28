@@ -10,6 +10,7 @@ export type SessionItem = {
   mode: TrainingMode;
   category?: WordCategory;
   remainingIds: number[];
+  recentFacts?: string[];
   totalAsked: number;
   correctCount: number;
   totalCount: number;
@@ -43,6 +44,7 @@ export class Session {
     readonly mode: TrainingMode,
     readonly category: WordCategory,
     readonly remainingIds: Collection<number>,
+    readonly recentFacts: Collection<string>,
     readonly totalAsked: number,
     readonly correctCount: number,
     readonly totalCount: number,
@@ -66,6 +68,9 @@ export class Session {
       option<Collection<number>>(o.remainingIds).getOrElseValue(
         this.remainingIds,
       ),
+      option<Collection<string>>(o.recentFacts).getOrElseValue(
+        this.recentFacts,
+      ),
       option(o.totalAsked).getOrElseValue(this.totalAsked),
       option(o.correctCount).getOrElseValue(this.correctCount),
       option(o.totalCount).getOrElseValue(this.totalCount),
@@ -87,6 +92,7 @@ export class Session {
       mode: this.mode,
       category: this.category,
       remainingIds: this.remainingIds.toArray,
+      recentFacts: this.recentFacts.toArray,
       totalAsked: this.totalAsked,
       correctCount: this.correctCount,
       totalCount: this.totalCount,
@@ -110,6 +116,9 @@ export class Session {
     const remainingIds = Array.isArray(obj.remainingIds)
       ? obj.remainingIds.map((value) => Number(value))
       : [];
+    const recentFacts = Array.isArray(obj.recentFacts)
+      ? obj.recentFacts.map((value) => String(value))
+      : [];
 
     return new Session(
       String(obj.sessionId ?? ""),
@@ -118,6 +127,7 @@ export class Session {
       (obj.mode ?? TrainingMode.GrRu) as TrainingMode,
       (obj.category ?? WordCategoryService.defaultCategory()) as WordCategory,
       new Collection(remainingIds),
+      new Collection(recentFacts),
       Number(obj.totalAsked ?? 0),
       Number(obj.correctCount ?? 0),
       Number(obj.totalCount ?? remainingIds.length),
