@@ -9,7 +9,7 @@ import { NullTelegramService } from "./mock/null-telegram-service";
 import { NullMetricsService } from "./mock/null-metrics-service";
 import { InMemorySessionsRepository } from "./mock/in-memory-sessions-repository";
 import { DeterministicQuestionGenerator } from "./mock/deterministic-question-generator";
-import { WordCategoryService } from "../src/word-category";
+import { WordCategory, WordCategoryService } from "../src/word-category";
 
 /**
  * Shared test context for quiz/game suites.
@@ -32,11 +32,30 @@ export class Test {
       ["γαμμα", "gamma"],
       ["δελτα", "delta"],
     ];
+    const adjectivesA1Rows: TermRow[] = [
+      ["καλός", "good"],
+      ["μεγάλος", "big"],
+      ["μικρός", "small"],
+      ["ωραίος", "nice"],
+    ];
+    const adverbsA1Rows: TermRow[] = [
+      ["πάντα", "always"],
+      ["ποτέ", "never"],
+      ["εδώ", "here"],
+      ["εκεί", "there"],
+    ];
     this.sheetsService = new DummySheetsService(
-      HashMap.of([
-        WordCategoryService.sheetName("a1"),
-        Collection.from(a1Rows),
-      ]),
+      HashMap.of(
+        [WordCategoryService.sheetName("a1"), Collection.from(a1Rows)],
+        [
+          WordCategoryService.sheetName("a1", WordCategory.Adjectives),
+          Collection.from(adjectivesA1Rows),
+        ],
+        [
+          WordCategoryService.sheetName("a1", WordCategory.Adverbs),
+          Collection.from(adverbsA1Rows),
+        ],
+      ),
     );
     const collectMenuRenderer = async (action: Action) => {
       this.actions.append(action);

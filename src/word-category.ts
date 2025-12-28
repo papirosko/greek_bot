@@ -4,6 +4,8 @@
 export enum WordCategory {
   Verbs = "verbs",
   Nouns = "nouns",
+  Adjectives = "adjectives",
+  Adverbs = "adverbs",
 }
 
 /**
@@ -36,6 +38,15 @@ export class WordCategoryService {
    * @returns Display label in Russian.
    */
   static formatLabel(category: WordCategory): string {
-    return category === WordCategory.Nouns ? "существительные" : "глаголы";
+    if (category === WordCategory.Nouns) {
+      return "существительные";
+    }
+    if (category === WordCategory.Adjectives) {
+      return "прилагательные";
+    }
+    if (category === WordCategory.Adverbs) {
+      return "наречия/предлоги";
+    }
+    return "глаголы";
   }
 }

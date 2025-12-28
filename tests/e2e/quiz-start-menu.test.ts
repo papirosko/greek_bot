@@ -84,4 +84,47 @@ describe("Quiz start menu", () => {
       ),
     );
   });
+
+  it("accepts adjective and adverb categories", async () => {
+    await test.quiz.handleUpdate(
+      test.createTgCallback(222, 333, "category:adjectives|mode:ru-gr", "cb-adj"),
+    );
+    await test.quiz.handleUpdate(
+      test.createTgCallback(222, 333, "category:adverbs|mode:ru-gr", "cb-adv"),
+    );
+
+    const items = test.renderedActions.map((action) => action.item).toArray;
+    expect(items.slice(0, 2)).toEqual([
+      {
+        type: ActionType.AnswerCallback,
+        payload: { callbackId: "cb-adj" },
+      },
+      {
+        type: ActionType.UpdateLastMessage,
+        payload: {
+          chatId: 222,
+          messageId: 333,
+          action: "renderCategorySelected",
+          mode: TrainingMode.RuGr,
+          category: WordCategory.Adjectives,
+        },
+      },
+    ]);
+    expect(items.slice(2, 4)).toEqual([
+      {
+        type: ActionType.AnswerCallback,
+        payload: { callbackId: "cb-adv" },
+      },
+      {
+        type: ActionType.UpdateLastMessage,
+        payload: {
+          chatId: 222,
+          messageId: 333,
+          action: "renderCategorySelected",
+          mode: TrainingMode.RuGr,
+          category: WordCategory.Adverbs,
+        },
+      },
+    ]);
+  });
 });

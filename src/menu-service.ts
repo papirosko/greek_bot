@@ -327,6 +327,18 @@ export class MenuService {
           callback_data: `category:${WordCategory.Nouns}|mode:${mode}`,
         },
       ],
+      [
+        {
+          text: "Прилагательные",
+          callback_data: `category:${WordCategory.Adjectives}|mode:${mode}`,
+        },
+      ],
+      [
+        {
+          text: "Наречия и предлоги",
+          callback_data: `category:${WordCategory.Adverbs}|mode:${mode}`,
+        },
+      ],
     ]);
   }
 

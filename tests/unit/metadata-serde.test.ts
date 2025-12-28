@@ -58,6 +58,16 @@ describe("MetadataSerDe", () => {
     expect(
       MetadataSerDe.parseCategory("category:nouns|mode:gr-ru"),
     ).toEqual(some({ category: WordCategory.Nouns, mode: TrainingMode.GrRu }));
+    expect(
+      MetadataSerDe.parseCategory("category:adjectives|mode:ru-gr"),
+    ).toEqual(
+      some({ category: WordCategory.Adjectives, mode: TrainingMode.RuGr }),
+    );
+    expect(
+      MetadataSerDe.parseCategory("category:adverbs|mode:ru-gr"),
+    ).toEqual(
+      some({ category: WordCategory.Adverbs, mode: TrainingMode.RuGr }),
+    );
     expect(MetadataSerDe.parseCategory("category:verbs|mode:write")).toEqual(
       none,
     );
